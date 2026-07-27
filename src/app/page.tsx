@@ -3,30 +3,35 @@
 import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { ParticleBackground } from '@/components/ParticleBackground';
 import { LandingHero } from '@/components/LandingHero';
 import { TechSelector } from '@/components/TechSelector';
 import { DifficultySelector } from '@/components/DifficultySelector';
 import { InterviewCard } from '@/components/InterviewCard';
+import { InstantFeedbackCard } from '@/components/InstantFeedbackCard';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { ApiKeyModal } from '@/components/ApiKeyModal';
+import { ParticleBackground } from '@/components/ParticleBackground';
+
 import {
-  Difficulty,
   Question,
   QuestionResult,
+  Difficulty,
   AnswerEvaluation,
   FinalAnalytics,
   QuestionCount,
 } from '@/lib/types';
-import { generateFinalAnalytics } from '@/lib/mockData';
+import { generateNVIDIAQuestions, evaluateNVIDIAAnswer } from '@/lib/nvidiaClient';
 
-type Step = 'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics';
+const RENDER_BACKEND_URL = 'https://kodewithk.onrender.com';
 
 export default function Home() {
-  const [currentStep, setCurrentStep] = useState<Step>('landing');
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  // Navigation step state
+  const [currentStep, setCurrentStep] = useState<
+    'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics'
+  >('landing');
 
-  // API Key state
+  // UI & Theme state
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [apiKey, setApiKey] = useState<string>('');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
@@ -49,8 +54,8 @@ export default function Home() {
 
   // Load stored API key if exists in localStorage
   useEffect(() => {
-    const storedKey = localStorage.getItem('nvidia_api_key');
-    if (storedKey) setApiKey(storedKey);
+    const savedKey = localStorage.getItem('nvidia_api_key');
+    if (savedKey) setApiKey(savedKey);
   }, []);
 
   const handleSaveApiKey = (key: string) => {
@@ -62,31 +67,20 @@ export default function Home() {
     }
   };
 
-  const handleToggleTech = (tech: string) => {
-    setSelectedTechs((prev) =>
-      prev.includes(tech) ? prev.filter((t) => t !== tech) : [...prev, tech]
-    );
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const handleSelectCategory = (techs: string[]) => {
-    const allPresent = techs.every((t) => selectedTechs.includes(t));
-    if (allPresent) {
-      setSelectedTechs((prev) => prev.filter((t) => !techs.includes(t)));
-    } else {
-      setSelectedTechs((prev) => Array.from(new Set([...prev, ...techs])));
-    }
-  };
-
-  const handleClearAllTechs = () => {
-    setSelectedTechs([]);
-  };
-
-  // Start Interview Generation with exact questionCount
+  // Start interview generation process
   const handleStartInterview = async () => {
     setIsLoadingQuestions(true);
-    const targetTechs = selectedTechs.length > 0 ? selectedTechs : ['Python', 'SQL'];
+    const targetTechs = selectedTechs.length > 0 ? selectedTechs : ['Python'];
+
+    let questionsList: Question[] = [];
+    let newSessionId = `session_${Date.now()}`;
 
     try {
+      // 1. Try Next.js internal API route first
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,23 +92,56 @@ export default function Home() {
         }),
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to generate interview questions');
+      if (res.ok) {
+        const data = await res.json();
+        newSessionId = data.sessionId || newSessionId;
+        questionsList = data.questions || [];
       }
-
-      const data = await res.json();
-      setSessionId(data.sessionId);
-      setQuestions(data.questions);
-      setCurrentIndex(0);
-      setResults([]);
-      setCurrentEvaluation(null);
-      setCurrentStep('interview');
-    } catch (error) {
-      console.error('Failed to generate interview:', error);
-      alert('Error initializing interview. Please check your network connection.');
-    } finally {
-      setIsLoadingQuestions(false);
+    } catch (e) {
+      console.warn('Next.js API route failed, trying direct Render backend...');
     }
+
+    // 2. Direct Render backend fallback for static hosting environment
+    if (!questionsList || questionsList.length === 0) {
+      try {
+        const pyRes = await fetch(`${RENDER_BACKEND_URL}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            selectedTechs: targetTechs,
+            difficulty,
+            questionCount,
+            apiKey,
+          }),
+        });
+
+        if (pyRes.ok) {
+          const pyData = await pyRes.json();
+          questionsList = pyData.questions || [];
+        }
+      } catch (pyErr) {
+        console.warn('Render backend failed, using dynamic local fallback...');
+      }
+    }
+
+    // 3. Client dynamic engine fallback if network offline
+    if (!questionsList || questionsList.length === 0) {
+      questionsList = await generateNVIDIAQuestions(
+        targetTechs,
+        difficulty,
+        questionCount,
+        'technical',
+        apiKey
+      );
+    }
+
+    setSessionId(newSessionId);
+    setQuestions(questionsList);
+    setCurrentIndex(0);
+    setResults([]);
+    setCurrentEvaluation(null);
+    setCurrentStep('interview');
+    setIsLoadingQuestions(false);
   };
 
   // Evaluate candidate answer for single question
@@ -124,8 +151,11 @@ export default function Home() {
   ): Promise<AnswerEvaluation> => {
     setIsEvaluating(true);
     const currentQ = questions[currentIndex];
+    let evaluation: AnswerEvaluation | null = null;
+    let questionResult: QuestionResult | null = null;
 
     try {
+      // 1. Try Next.js API route
       const res = await fetch('/api/evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,111 +168,182 @@ export default function Home() {
         }),
       });
 
-      const data = await res.json();
-      const evaluation: AnswerEvaluation = data.evaluation;
-      const questionResult: QuestionResult = data.questionResult;
-
-      setCurrentEvaluation(evaluation);
-      setResults((prev) => {
-        const filtered = prev.filter((r) => r.question.id !== currentQ.id);
-        return [...filtered, questionResult];
-      });
-
-      return evaluation;
-    } catch (error) {
-      console.error('Evaluation error:', error);
-      const fallbackEval: AnswerEvaluation = {
-        questionId: currentQ.id,
-        isCorrect: false,
-        score: 5,
-        userAnswer,
-        correctAnswer: currentQ.correctAnswer,
-        explanation: currentQ.explanation,
-        interviewerExpectation: 'Clear structured response.',
-        commonMistakes: 'Lack of key details.',
-        interviewTip: 'Focus on clear concise reasoning.',
-        keywordsMatched: [],
-        feedbackSummary: 'Completed',
-      };
-      setCurrentEvaluation(fallbackEval);
-      return fallbackEval;
-    } finally {
-      setIsEvaluating(false);
+      if (res.ok) {
+        const data = await res.json();
+        evaluation = data.evaluation;
+        questionResult = data.questionResult;
+      }
+    } catch (e) {
+      console.warn('Next.js evaluate route failed, trying direct Render backend...');
     }
-  };
 
-  // Advance to next question OR stop immediately on exact question count completion
-  const handleNextQuestion = async () => {
-    setCurrentEvaluation(null);
-
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-    } else {
-      // Selected question count completed! Stop questions & calculate final analytics
+    // 2. Direct Render backend fallback
+    if (!evaluation) {
       try {
-        const res = await fetch('/api/session', {
+        const pyRes = await fetch(`${RENDER_BACKEND_URL}/evaluate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action: 'complete',
-            sessionId,
-            results,
-            selectedTechs,
-            difficulty,
+            question: currentQ,
+            userAnswer,
+            apiKey,
           }),
         });
 
-        const data = await res.json();
-        setFinalAnalytics(data.analytics);
-      } catch (e) {
-        console.error('Session complete error:', e);
-        const fallbackAnalytics = generateFinalAnalytics(results, selectedTechs, difficulty);
-        setFinalAnalytics(fallbackAnalytics);
+        if (pyRes.ok) {
+          const pyData = await pyRes.json();
+          evaluation = pyData.evaluation;
+        }
+      } catch (pyErr) {
+        console.warn('Render evaluate failed, using local client evaluator...');
       }
-      setCurrentStep('analytics');
+    }
+
+    // 3. Client evaluator fallback
+    if (!evaluation) {
+      evaluation = await evaluateNVIDIAAnswer(currentQ, userAnswer, apiKey);
+    }
+
+    if (!questionResult) {
+      questionResult = {
+        question: currentQ,
+        userAnswer: userAnswer || 'Skipped',
+        evaluation,
+        timeSpentSeconds,
+      };
+    }
+
+    setCurrentEvaluation(evaluation);
+    setResults((prev) => {
+      const filtered = prev.filter((r) => r.question.id !== currentQ.id);
+      return [...filtered, questionResult!];
+    });
+
+    setIsEvaluating(false);
+    return evaluation;
+  };
+
+  // Handle navigating to next question or completing interview
+  const handleNextQuestion = () => {
+    setCurrentEvaluation(null);
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+    } else {
+      finishInterview();
     }
   };
 
-  // Full Purge of session data & return to Landing
-  const handlePurgeAndReset = async () => {
-    if (sessionId) {
-      try {
-        await fetch('/api/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'clear', sessionId }),
-        });
-      } catch (e) {
-        console.error('Clear session error:', e);
-      }
-    }
+  // Finish interview and calculate final analytics
+  const finishInterview = () => {
+    const totalQuestions = questions.length;
+    const correctCount = results.filter((r) => r.evaluation.isCorrect).length;
+    const incorrectCount = totalQuestions - correctCount;
+    const totalScore = results.reduce((acc, r) => acc + r.evaluation.score, 0);
+    const maxScore = totalQuestions * 10;
+    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+    const totalTimeSeconds = results.reduce((acc, r) => acc + r.timeSpentSeconds, 0);
+    const avgTimePerQuestion = totalQuestions > 0 ? Math.round(totalTimeSeconds / totalQuestions) : 0;
 
-    setSessionId('');
+    const rating: 'Interview Ready' | 'Excellent' | 'Good' | 'Needs Improvement' =
+      percentage >= 85
+        ? 'Interview Ready'
+        : percentage >= 70
+        ? 'Excellent'
+        : percentage >= 50
+        ? 'Good'
+        : 'Needs Improvement';
+
+    const techPerf: Record<string, { total: number; score: number; percentage: number }> = {};
+    results.forEach((r) => {
+      const tech = r.question.technology || 'General';
+      if (!techPerf[tech]) {
+        techPerf[tech] = { total: 0, score: 0, percentage: 0 };
+      }
+      techPerf[tech].total += 1;
+      techPerf[tech].score += r.evaluation.score;
+      techPerf[tech].percentage = Math.round((techPerf[tech].score / (techPerf[tech].total * 10)) * 100);
+    });
+
+    const diffPerf: Record<string, { total: number; score: number; percentage: number }> = {};
+    results.forEach((r) => {
+      const diff = r.question.difficulty || 'Medium';
+      if (!diffPerf[diff]) {
+        diffPerf[diff] = { total: 0, score: 0, percentage: 0 };
+      }
+      diffPerf[diff].total += 1;
+      diffPerf[diff].score += r.evaluation.score;
+      diffPerf[diff].percentage = Math.round((diffPerf[diff].score / (diffPerf[diff].total * 10)) * 100);
+    });
+
+    const analytics: FinalAnalytics = {
+      totalScore,
+      maxScore,
+      percentage,
+      correctCount,
+      incorrectCount,
+      skippedCount: 0,
+      accuracy: percentage,
+      totalTimeSeconds,
+      avgTimePerQuestion,
+      performanceRating: rating,
+      hiringRecommendation:
+        percentage >= 80
+          ? 'Strong Hire — Demonstrates technical depth and structured problem solving.'
+          : percentage >= 60
+          ? 'Consider — Solid core understanding with minor technical gaps.'
+          : 'Needs Practice — Review core concepts and syntax.',
+      summary: `Completed ${totalQuestions} questions across ${selectedTechs.join(', ')} with an overall score of ${percentage}%.`,
+      strongAreas: [
+        'Demonstrated foundational principles',
+        'Structured technical explanations',
+      ],
+      weakAreas: [
+        'Practice concise time management for complex scenarios',
+        'Elaborate with concrete syntax examples',
+      ],
+      techPerformance: techPerf,
+      difficultyPerformance: diffPerf,
+      performanceInsights: [
+        `Average speed per question: ${avgTimePerQuestion} seconds`,
+        `Overall accuracy rating: ${percentage}%`,
+      ],
+    };
+
+    setFinalAnalytics(analytics);
+    setCurrentStep('analytics');
+  };
+
+  // Restart interview
+  const handleRestart = () => {
     setQuestions([]);
-    setCurrentIndex(0);
     setResults([]);
+    setCurrentIndex(0);
     setCurrentEvaluation(null);
     setFinalAnalytics(null);
-    setCurrentStep('landing');
+    setCurrentStep('tech');
   };
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950`}>
-      {/* Particle Background */}
-      <ParticleBackground />
+    <div
+      className={`min-h-screen flex flex-col transition-colors duration-300 font-sans ${
+        theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+      }`}
+    >
+      {/* Background Particles Visual FX */}
+      <ParticleBackground theme={theme} />
 
-      {/* Top Navbar with KodeWithK branding */}
+      {/* Top Navbar */}
       <Navbar
         currentStep={currentStep}
-        onNavigateHome={handlePurgeAndReset}
+        onNavigateHome={() => setCurrentStep('landing')}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         hasApiKey={Boolean(apiKey)}
         theme={theme}
-        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+        onToggleTheme={handleToggleTheme}
       />
 
-      {/* Main Body Flow */}
-      <main className="flex-1 relative z-10">
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 flex flex-col justify-center">
         {currentStep === 'landing' && (
           <LandingHero onStart={() => setCurrentStep('tech')} />
         )}
@@ -252,9 +353,13 @@ export default function Home() {
             questionCount={questionCount}
             onSelectQuestionCount={setQuestionCount}
             selectedTechs={selectedTechs}
-            onToggleTech={handleToggleTech}
-            onSelectCategory={handleSelectCategory}
-            onClearAll={handleClearAllTechs}
+            onToggleTech={(t) =>
+              setSelectedTechs((prev) =>
+                prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]
+              )
+            }
+            onSelectCategory={(techs) => setSelectedTechs(techs)}
+            onClearAll={() => setSelectedTechs([])}
             onNext={() => setCurrentStep('difficulty')}
           />
         )}
@@ -271,34 +376,40 @@ export default function Home() {
         )}
 
         {currentStep === 'interview' && questions.length > 0 && (
-          <InterviewCard
-            question={questions[currentIndex]}
-            currentIndex={currentIndex}
-            totalQuestions={questions.length}
-            onEvaluateAnswer={handleEvaluateAnswer}
-            onPrevious={() => {
-              if (currentIndex > 0) {
-                setCurrentIndex((prev) => prev - 1);
-                setCurrentEvaluation(null);
-              }
-            }}
-            onNextQuestion={handleNextQuestion}
-            isEvaluating={isEvaluating}
-            evaluationResult={currentEvaluation}
-          />
+          <div className="space-y-6 max-w-4xl mx-auto w-full">
+            <InterviewCard
+              question={questions[currentIndex]}
+              currentIndex={currentIndex}
+              totalQuestions={questions.length}
+              onEvaluateAnswer={handleEvaluateAnswer}
+              onPrevious={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
+              onNextQuestion={handleNextQuestion}
+              isEvaluating={isEvaluating}
+              evaluationResult={currentEvaluation}
+            />
+
+            {currentEvaluation && (
+              <InstantFeedbackCard
+                question={questions[currentIndex]}
+                evaluation={currentEvaluation}
+                onNextQuestion={handleNextQuestion}
+                isLastQuestion={currentIndex === questions.length - 1}
+              />
+            )}
+          </div>
         )}
 
         {currentStep === 'analytics' && finalAnalytics && (
           <AnalyticsDashboard
             analytics={finalAnalytics}
             results={results}
-            onAutoPurgeComplete={handlePurgeAndReset}
+            onAutoPurgeComplete={handleRestart}
           />
         )}
       </main>
 
       {/* Footer */}
-      <Footer onClearSession={handlePurgeAndReset} />
+      <Footer onClearSession={handleRestart} />
 
       {/* API Key Modal */}
       <ApiKeyModal

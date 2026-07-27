@@ -2,7 +2,11 @@
 
 import React, { useEffect, useRef } from 'react';
 
-export const ParticleBackground: React.FC = () => {
+interface ParticleBackgroundProps {
+  theme?: 'dark' | 'light';
+}
+
+export const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ theme = 'dark' }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
@@ -108,7 +112,7 @@ export const ParticleBackground: React.FC = () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [theme]);
 
   return (
     <canvas
