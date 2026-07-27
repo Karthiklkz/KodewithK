@@ -387,15 +387,6 @@ export default function Home() {
               isEvaluating={isEvaluating}
               evaluationResult={currentEvaluation}
             />
-
-            {currentEvaluation && (
-              <InstantFeedbackCard
-                question={questions[currentIndex]}
-                evaluation={currentEvaluation}
-                onNextQuestion={handleNextQuestion}
-                isLastQuestion={currentIndex === questions.length - 1}
-              />
-            )}
           </div>
         )}
 
