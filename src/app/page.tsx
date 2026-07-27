@@ -1,65 +1,312 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { Navbar } from '@/components/Navbar';
+import { Footer } from '@/components/Footer';
+import { ParticleBackground } from '@/components/ParticleBackground';
+import { LandingHero } from '@/components/LandingHero';
+import { TechSelector } from '@/components/TechSelector';
+import { DifficultySelector } from '@/components/DifficultySelector';
+import { InterviewCard } from '@/components/InterviewCard';
+import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
+import { ApiKeyModal } from '@/components/ApiKeyModal';
+import {
+  Difficulty,
+  Question,
+  QuestionResult,
+  AnswerEvaluation,
+  FinalAnalytics,
+  QuestionCount,
+} from '@/lib/types';
+import { generateFinalAnalytics } from '@/lib/mockData';
+
+type Step = 'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics';
 
 export default function Home() {
+  const [currentStep, setCurrentStep] = useState<Step>('landing');
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  // API Key state
+  const [apiKey, setApiKey] = useState<string>('');
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+
+  // Configuration state
+  const [questionCount, setQuestionCount] = useState<QuestionCount>(5);
+  const [selectedTechs, setSelectedTechs] = useState<string[]>(['Python']);
+  const [difficulty, setDifficulty] = useState<Difficulty>('Medium');
+
+  // Interview execution state
+  const [sessionId, setSessionId] = useState<string>('');
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [results, setResults] = useState<QuestionResult[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [currentEvaluation, setCurrentEvaluation] = useState<AnswerEvaluation | null>(null);
+
+  // Final analytics state
+  const [finalAnalytics, setFinalAnalytics] = useState<FinalAnalytics | null>(null);
+
+  // Load stored API key if exists in localStorage
+  useEffect(() => {
+    const storedKey = localStorage.getItem('nvidia_api_key');
+    if (storedKey) setApiKey(storedKey);
+  }, []);
+
+  const handleSaveApiKey = (key: string) => {
+    setApiKey(key);
+    if (key) {
+      localStorage.setItem('nvidia_api_key', key);
+    } else {
+      localStorage.removeItem('nvidia_api_key');
+    }
+  };
+
+  const handleToggleTech = (tech: string) => {
+    setSelectedTechs((prev) =>
+      prev.includes(tech) ? prev.filter((t) => t !== tech) : [...prev, tech]
+    );
+  };
+
+  const handleSelectCategory = (techs: string[]) => {
+    const allPresent = techs.every((t) => selectedTechs.includes(t));
+    if (allPresent) {
+      setSelectedTechs((prev) => prev.filter((t) => !techs.includes(t)));
+    } else {
+      setSelectedTechs((prev) => Array.from(new Set([...prev, ...techs])));
+    }
+  };
+
+  const handleClearAllTechs = () => {
+    setSelectedTechs([]);
+  };
+
+  // Start Interview Generation with exact questionCount
+  const handleStartInterview = async () => {
+    setIsLoadingQuestions(true);
+    const targetTechs = selectedTechs.length > 0 ? selectedTechs : ['Python', 'SQL'];
+
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionCount,
+          selectedTechs: targetTechs,
+          difficulty,
+          apiKey,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to generate interview questions');
+      }
+
+      const data = await res.json();
+      setSessionId(data.sessionId);
+      setQuestions(data.questions);
+      setCurrentIndex(0);
+      setResults([]);
+      setCurrentEvaluation(null);
+      setCurrentStep('interview');
+    } catch (error) {
+      console.error('Failed to generate interview:', error);
+      alert('Error initializing interview. Please check your network connection.');
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  };
+
+  // Evaluate candidate answer for single question
+  const handleEvaluateAnswer = async (
+    userAnswer: string,
+    timeSpentSeconds: number
+  ): Promise<AnswerEvaluation> => {
+    setIsEvaluating(true);
+    const currentQ = questions[currentIndex];
+
+    try {
+      const res = await fetch('/api/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId,
+          question: currentQ,
+          userAnswer,
+          timeSpentSeconds,
+          apiKey,
+        }),
+      });
+
+      const data = await res.json();
+      const evaluation: AnswerEvaluation = data.evaluation;
+      const questionResult: QuestionResult = data.questionResult;
+
+      setCurrentEvaluation(evaluation);
+      setResults((prev) => {
+        const filtered = prev.filter((r) => r.question.id !== currentQ.id);
+        return [...filtered, questionResult];
+      });
+
+      return evaluation;
+    } catch (error) {
+      console.error('Evaluation error:', error);
+      const fallbackEval: AnswerEvaluation = {
+        questionId: currentQ.id,
+        isCorrect: false,
+        score: 5,
+        userAnswer,
+        correctAnswer: currentQ.correctAnswer,
+        explanation: currentQ.explanation,
+        interviewerExpectation: 'Clear structured response.',
+        commonMistakes: 'Lack of key details.',
+        interviewTip: 'Focus on clear concise reasoning.',
+        keywordsMatched: [],
+        feedbackSummary: 'Completed',
+      };
+      setCurrentEvaluation(fallbackEval);
+      return fallbackEval;
+    } finally {
+      setIsEvaluating(false);
+    }
+  };
+
+  // Advance to next question OR stop immediately on exact question count completion
+  const handleNextQuestion = async () => {
+    setCurrentEvaluation(null);
+
+    if (currentIndex < questions.length - 1) {
+      setCurrentIndex((prev) => prev + 1);
+    } else {
+      // Selected question count completed! Stop questions & calculate final analytics
+      try {
+        const res = await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'complete',
+            sessionId,
+            results,
+            selectedTechs,
+            difficulty,
+          }),
+        });
+
+        const data = await res.json();
+        setFinalAnalytics(data.analytics);
+      } catch (e) {
+        console.error('Session complete error:', e);
+        const fallbackAnalytics = generateFinalAnalytics(results, selectedTechs, difficulty);
+        setFinalAnalytics(fallbackAnalytics);
+      }
+      setCurrentStep('analytics');
+    }
+  };
+
+  // Full Purge of session data & return to Landing
+  const handlePurgeAndReset = async () => {
+    if (sessionId) {
+      try {
+        await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'clear', sessionId }),
+        });
+      } catch (e) {
+        console.error('Clear session error:', e);
+      }
+    }
+
+    setSessionId('');
+    setQuestions([]);
+    setCurrentIndex(0);
+    setResults([]);
+    setCurrentEvaluation(null);
+    setFinalAnalytics(null);
+    setCurrentStep('landing');
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+    <div className={`min-h-screen flex flex-col font-sans bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950`}>
+      {/* Particle Background */}
+      <ParticleBackground />
+
+      {/* Top Navbar with KodeWithK branding */}
+      <Navbar
+        currentStep={currentStep}
+        onNavigateHome={handlePurgeAndReset}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        hasApiKey={Boolean(apiKey)}
+        theme={theme}
+        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+      />
+
+      {/* Main Body Flow */}
+      <main className="flex-1 relative z-10">
+        {currentStep === 'landing' && (
+          <LandingHero onStart={() => setCurrentStep('tech')} />
+        )}
+
+        {currentStep === 'tech' && (
+          <TechSelector
+            questionCount={questionCount}
+            onSelectQuestionCount={setQuestionCount}
+            selectedTechs={selectedTechs}
+            onToggleTech={handleToggleTech}
+            onSelectCategory={handleSelectCategory}
+            onClearAll={handleClearAllTechs}
+            onNext={() => setCurrentStep('difficulty')}
+          />
+        )}
+
+        {currentStep === 'difficulty' && (
+          <DifficultySelector
+            selectedDifficulty={difficulty}
+            onSelectDifficulty={setDifficulty}
+            questionCount={questionCount}
+            onBack={() => setCurrentStep('tech')}
+            onStartInterview={handleStartInterview}
+            isLoading={isLoadingQuestions}
+          />
+        )}
+
+        {currentStep === 'interview' && questions.length > 0 && (
+          <InterviewCard
+            question={questions[currentIndex]}
+            currentIndex={currentIndex}
+            totalQuestions={questions.length}
+            onEvaluateAnswer={handleEvaluateAnswer}
+            onPrevious={() => {
+              if (currentIndex > 0) {
+                setCurrentIndex((prev) => prev - 1);
+                setCurrentEvaluation(null);
+              }
+            }}
+            onNextQuestion={handleNextQuestion}
+            isEvaluating={isEvaluating}
+            evaluationResult={currentEvaluation}
+          />
+        )}
+
+        {currentStep === 'analytics' && finalAnalytics && (
+          <AnalyticsDashboard
+            analytics={finalAnalytics}
+            results={results}
+            onAutoPurgeComplete={handlePurgeAndReset}
+          />
+        )}
       </main>
+
+      {/* Footer */}
+      <Footer onClearSession={handlePurgeAndReset} />
+
+      {/* API Key Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        currentApiKey={apiKey}
+        onSaveApiKey={handleSaveApiKey}
+      />
     </div>
   );
 }
