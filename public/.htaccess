@@ -1,0 +1,18 @@
+# Hostinger Apache configuration for Next.js Static Export
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Serve existing files directly
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Fallback to index.html for single page routing
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# Allow access to _next directory on Hostinger
+<IfModule mod_headers.c>
+  Header set Access-Control-Allow-Origin "*"
+</IfModule>
