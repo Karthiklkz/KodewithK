@@ -362,9 +362,9 @@ def generate_questions(payload: QuestionRequest):
 Generate EXACTLY {count} unique interview questions based strictly on topics [{', '.join(selected_techs)}] and difficulty "{difficulty}".
 
 CRITICAL DEDUPLICATION REQUIREMENT:
-- EVERY QUESTION MUST BE COMPLETELY UNIQUE. Absolutely zero duplicate question stems or repeated concepts in the JSON array!
+- EVERY QUESTION MUST BE COMPLETELY UNIQUE AND FREELY RANDOMIZED. Absolutely zero duplicate question stems or repeated concepts in the JSON array!
 - Match the questions ACCURATELY to the domain and difficulty level!
-- For HTML at Easy level: Ask realistic fundamental questions (e.g. "What is the effect of the <b> tag?", "What is the function of the HTML style attribute?", "Which tag is used for hyperlinks?").
+- Dynamically generate fresh, diverse technical questions covering varied core concepts for the selected topics.
 - {hr_instruction}
 
 STRICT FORMAT RULES:
@@ -511,7 +511,8 @@ Output raw JSON array only."""
                 "keywords": [tech, "best practice", "technical"]
             })
         elif available:
-            q_template = available[0]
+            random.shuffle(available)
+            q_template = available.pop(0)
             seen_stems.add(q_template["q"].lower())
             opts, correct_ans = shuffle_options_with_correct_pos(q_template["rawOpts"])
 
