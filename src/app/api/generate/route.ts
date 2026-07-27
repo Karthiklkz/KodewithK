@@ -4,7 +4,7 @@ import { sessionStore } from '@/lib/sessionStore';
 import { generateSessionId } from '@/lib/utils';
 import { Difficulty, InterviewSession, QuestionCount } from '@/lib/types';
 
-const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8011';
+const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'https://kodewithk.onrender.com';
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
         const pyData = await pyRes.json();
         if (Array.isArray(pyData.questions) && pyData.questions.length > 0) {
           questions = pyData.questions;
-          console.log(`[Next.js API] Generated ${questions.length} questions via Python FastAPI Service`);
+          console.log(`[Next.js API] Generated ${questions.length} questions via Python FastAPI Service (${PYTHON_BACKEND_URL})`);
         }
       }
     } catch (pyErr) {

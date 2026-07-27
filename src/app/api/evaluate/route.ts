@@ -3,7 +3,7 @@ import { evaluateNVIDIAAnswer } from '@/lib/nvidiaClient';
 import { sessionStore } from '@/lib/sessionStore';
 import { Question, QuestionResult, AnswerEvaluation } from '@/lib/types';
 
-const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8011';
+const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'https://kodewithk.onrender.com';
 
 export async function POST(req: NextRequest) {
   try {
