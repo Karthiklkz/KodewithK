@@ -36,8 +36,18 @@ export async function generateNVIDIAQuestions(
     ? "Include questions based on selected HR/Behavioral topics."
     : "DO NOT include any HR or behavioral soft-skills questions unless explicitly listed in selected topics. Generate questions strictly from the technical topics provided.";
 
+  const difficultyGuide: Record<string, string> = {
+    Easy: "Target junior engineers: Focus on basic syntax, foundational methods, and standard definitions.",
+    Medium: "Target mid-level engineers: Focus on intermediate architectural patterns, asynchronous execution, framework idioms, and common optimization techniques.",
+    Hard: "Target SENIOR/EXPERT STAFF ENGINEERS: Ask TOUGH, ADVANCED, EXPERT-LEVEL interview questions! Focus on deep engine mechanics, memory allocation (__slots__, V8 hidden classes, garbage collection cycles), GIL/concurrency primitives, race conditions, distributed systems trade-offs, and complex edge cases. DO NOT ask beginner or surface-level questions!",
+    Expert: "Target PRINCIPAL/STAFF ARCHITECT ENGINEERS: Ask EXTREMELY TOUGH, DEEP-INTERNALS interview questions! Focus on core runtime internals, lockless concurrency, memory barrier semantics, low-level optimization, and high-scale distributed system trade-offs."
+  };
+
   const prompt = `You are a Senior Technical and Engineering Interviewer at Google and NVIDIA.
 Use the selected topics [${selectedTechs.join(', ')}] and difficulty level "${difficulty}" to create exactly ${questionCount} unique interview questions.
+
+STRICT DIFFICULTY ENFORCEMENT (${difficulty}):
+- ${difficultyGuide[difficulty] || "Match requested difficulty precisely."}
 
 IMPORTANT RULES:
 1. Generate EXACTLY ${questionCount} questions total.
