@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 app = FastAPI(
     title="KodeWithK AI Interview Generator API",
-    description="Python FastAPI backend powering 100% live AI question generation and candidate answer evaluation",
+    description="Python FastAPI backend powering 100% live, human-understandable AI question generation and evaluation",
     version="1.0.0"
 )
 
@@ -68,6 +68,184 @@ def shuffle_options_with_correct_pos(raw_options: List[str]) -> tuple[List[str],
     final_opts = [f"{prefixes[p]}. {shuffled[p]}" for p in range(4)]
     return final_opts, final_opts[correct_pos]
 
+# Clean, human-understandable questions grouped by Tech and Difficulty
+CLEAR_HUMAN_BANK = {
+    "Python": {
+        "Easy": [
+            {
+                "q": "Which Python data type is immutable?",
+                "opts": ["Tuple", "List", "Dictionary", "Set"],
+                "exp": "Tuples cannot be modified after creation, making them immutable."
+            },
+            {
+                "q": "What will the expression 3 * 'A' produce in Python?",
+                "opts": ["'AAA'", "TypeError", "'3A'", "['A', 'A', 'A']"],
+                "exp": "Multiplying a string by an integer repeats the string that many times."
+            },
+            {
+                "q": "How do you open a file in Python so it automatically closes when finished?",
+                "opts": ["Using a 'with' statement", "Using a 'try...finally' block", "Calling file.close() at the top", "Importing os.file"],
+                "exp": "The 'with' statement acts as a context manager and guarantees the file closes automatically."
+            }
+        ],
+        "Medium": [
+            {
+                "q": "What is the primary difference between a list comprehension and a generator expression in Python?",
+                "opts": [
+                    "List comprehensions create the entire list in memory immediately, while generators calculate items one at a time on demand.",
+                    "Generators run faster because they use multi-threading automatically.",
+                    "List comprehensions can only process numbers, while generators work with text.",
+                    "There is no difference; both produce the same list object."
+                ],
+                "exp": "Generators evaluate lazily to save memory, whereas list comprehensions build the complete list in RAM immediately."
+            },
+            {
+                "q": "What is a Python decorator?",
+                "opts": [
+                    "A function that accepts another function as an argument and extends its behavior without modifying it directly.",
+                    "A visual styling attribute used in Python GUI applications.",
+                    "A special class used to format JSON outputs.",
+                    "A syntax feature used exclusively for memory cleanup."
+                ],
+                "exp": "Decorators wrap functions to dynamically modify or enhance their behavior."
+            }
+        ],
+        "Hard": [
+            {
+                "q": "How does Python's Global Interpreter Lock (GIL) affect multi-threaded programs?",
+                "opts": [
+                    "It prevents multiple native CPU threads from executing Python bytecodes simultaneously in CPython.",
+                    "It speeds up multi-core parallel processing for heavy math calculations.",
+                    "It automatically converts Python code into asynchronous C code.",
+                    "It locks database connections to avoid race conditions."
+                ],
+                "exp": "The GIL ensures only one thread executes CPython bytecode at a time, limiting CPU-bound speedups across multiple cores."
+            },
+            {
+                "q": "Why would an engineer declare __slots__ in a Python class?",
+                "opts": [
+                    "To prevent the creation of an instance dictionary (__dict__), saving significant RAM when creating millions of objects.",
+                    "To make all methods in the class run asynchronously.",
+                    "To protect class attributes from being deleted.",
+                    "To automatically generate database table schemas."
+                ],
+                "exp": "__slots__ reduces memory usage by allocating a fixed array for attributes instead of a dynamic dictionary."
+            }
+        ],
+        "Expert": [
+            {
+                "q": "In Python memory management, how does CPython detect and clean up circular references?",
+                "opts": [
+                    "Using a generational garbage collector that periodically tracks container objects and breaks reference cycles.",
+                    "By immediately throwing a MemoryError when a cycle is created.",
+                    "Reference counting alone automatically deletes circular references instantly.",
+                    "CPython cannot clean up circular references and relies on the OS reboot."
+                ],
+                "exp": "CPython uses reference counting for immediate cleanup and a generational garbage collector to identify and clear cyclic references."
+            }
+        ]
+    },
+    "JavaScript": {
+        "Easy": [
+            {
+                "q": "Which keyword is used to declare a variable that cannot be reassigned?",
+                "opts": ["const", "let", "var", "static"],
+                "exp": "const creates a block-scoped reference that cannot be reassigned."
+            },
+            {
+                "q": "What does the expression typeof NaN return in JavaScript?",
+                "opts": ["'number'", "'NaN'", "'undefined'", "'object'"],
+                "exp": "In JavaScript, NaN (Not-a-Number) is classified under the 'number' type."
+            }
+        ],
+        "Medium": [
+            {
+                "q": "What is a closure in JavaScript?",
+                "opts": [
+                    "A function that retains access to variables from its outer lexical scope even after the outer function has finished executing.",
+                    "A method used to close database connections safely.",
+                    "A tool for minifying JavaScript files for production.",
+                    "An event listener attached to the window object."
+                ],
+                "exp": "Closures allow inner functions to remember and access variables from their enclosing scope."
+            }
+        ],
+        "Hard": [
+            {
+                "q": "How does the JavaScript Event Loop prioritize Microtasks (Promises) vs Macrotasks (setTimeout)?",
+                "opts": [
+                    "The Microtask queue is completely drained after each task before moving on to the next Macrotask.",
+                    "Macrotasks and Microtasks alternate strictly 1-by-1 in a single FIFO queue.",
+                    "Macrotasks always execute first to prevent UI freezing.",
+                    "Microtasks are deferred until the user moves their cursor."
+                ],
+                "exp": "The event loop processes all pending Microtasks before picking up the next Macrotask."
+            }
+        ],
+        "Expert": [
+            {
+                "q": "How does V8 use Hidden Classes (Shapes) and Inline Caches to optimize object property access?",
+                "opts": [
+                    "V8 creates hidden layout shapes for objects with identical properties so call sites can cache property memory offsets directly in compiled code.",
+                    "V8 converts JavaScript objects into fixed C structs and forbids dynamic property additions.",
+                    "V8 stores object properties in browser cookies for faster lookup.",
+                    "V8 encrypts property names in RAM to prevent memory tampering."
+                ],
+                "exp": "Hidden classes track property offsets; inline caches store these offsets at call sites for near-instant access."
+            }
+        ]
+    },
+    "SQL": {
+        "Easy": [
+            {
+                "q": "Which SQL clause is used to filter rows before any grouping takes place?",
+                "opts": ["WHERE", "HAVING", "GROUP BY", "ORDER BY"],
+                "exp": "WHERE filters raw rows prior to aggregation with GROUP BY."
+            }
+        ],
+        "Medium": [
+            {
+                "q": "What is the difference between WHERE and HAVING in SQL?",
+                "opts": [
+                    "WHERE filters individual rows before grouping; HAVING filters aggregated group results after grouping.",
+                    "WHERE works only on numbers; HAVING works only on text strings.",
+                    "HAVING is used for sorting; WHERE is used for joins.",
+                    "There is no difference; both work identically."
+                ],
+                "exp": "WHERE filters rows before aggregation; HAVING filters aggregated metrics like SUM() or COUNT()."
+            }
+        ],
+        "Hard": [
+            {
+                "q": "Which database isolation level completely prevents Phantom Reads?",
+                "opts": ["SERIALIZABLE", "READ COMMITTED", "READ UNCOMMITTED", "REPEATABLE READ without locks"],
+                "exp": "SERIALIZABLE isolation prevents phantom reads by locking key ranges or enforcing sequential transactions."
+            }
+        ]
+    },
+    "HTML": {
+        "Easy": [
+            {
+                "q": "Which HTML tag is used to create a clickable hyperlink?",
+                "opts": ["<a>", "<link>", "<href>", "<url>"],
+                "exp": "The <a> (anchor) tag with the 'href' attribute creates hyperlinks."
+            }
+        ],
+        "Medium": [
+            {
+                "q": "How do <script async> and <script defer> differ when loading external scripts?",
+                "opts": [
+                    "async downloads and runs immediately (pausing HTML parsing); defer downloads in the background and runs only after HTML parsing completes.",
+                    "defer executes immediately; async waits for DOMContentLoaded.",
+                    "async works only for CSS files; defer works for JavaScript.",
+                    "Both attributes behave identically in modern browsers."
+                ],
+                "exp": "async executes as soon as it is downloaded; defer waits for DOM parsing to finish and runs scripts in order."
+            }
+        ]
+    }
+}
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Python KodeWithK Live AI Engine", "timestamp": time.time()}
@@ -86,45 +264,40 @@ def generate_questions(payload: QuestionRequest):
     hr_instruction = (
         "Include questions from the selected HR/Behavioral topic."
         if has_hr_selected
-        else "DO NOT include any HR or behavioral soft-skills questions unless explicitly listed in selected topics. Generate questions strictly from the technical topics provided."
+        else "DO NOT include any HR or behavioral soft-skills questions unless explicitly listed in selected topics. Generate questions strictly from technical topics."
     )
 
     difficulty_guide = {
-        "Easy": "Target junior engineers: Focus on basic syntax, foundational methods, and standard definitions.",
-        "Medium": "Target mid-level engineers: Focus on intermediate architectural patterns, asynchronous execution, framework idioms, and common optimization techniques.",
-        "Hard": "Target SENIOR/EXPERT STAFF ENGINEERS: Ask TOUGH, ADVANCED, EXPERT-LEVEL interview questions! Focus on deep engine mechanics, memory allocation (__slots__, V8 hidden classes, garbage collection cycles), GIL/concurrency primitives, race conditions, distributed systems trade-offs, and complex edge cases. DO NOT ask beginner or surface-level questions!",
-        "Expert": "Target PRINCIPAL ARCHITECTS: Ask EXTREMELY TOUGH, DEEP-INTERNALS interview questions! Focus on core runtime internals, lockless concurrency, memory barrier semantics, low-level optimization, and high-scale distributed system trade-offs."
-    }.get(difficulty, "Match the requested difficulty precisely.")
+        "Easy": "Target junior developers: Focus on basic syntax, standard built-ins, and foundational concepts.",
+        "Medium": "Target mid-level developers: Focus on framework patterns, asynchronous code, performance idioms, and practical design choices.",
+        "Hard": "Target senior engineers: Ask challenging, clear, practical questions on engine mechanics, memory efficiency, concurrency, and architecture trade-offs.",
+        "Expert": "Target principal architects: Ask deep technical questions on runtime internals, low-level optimizations, lockless algorithms, and system design."
+    }.get(difficulty, "Match requested difficulty accurately.")
 
     prompt = f"""You are a Senior Technical Interviewer at Google, NVIDIA, and Meta.
-Generate EXACTLY {count} unique interview questions based strictly on topics [{', '.join(selected_techs)}] and difficulty "{difficulty}".
+Generate EXACTLY {count} clear, natural, highly understandable interview questions based on topics [{', '.join(selected_techs)}] and difficulty "{difficulty}".
 
-STRICT DIFFICULTY ENFORCEMENT ({difficulty}):
-- {difficulty_guide}
+STRICT QUALITY RULES:
+1. UNDERSTANDABLE & CLEAR LANGUAGE: Ask clear, plain, professional interview questions that real software engineers easily understand. Avoid awkward, convoluted, or robotic phrasing.
+2. DIFFICULTY MATCH ({difficulty}):
+   - {difficulty_guide}
+3. NO DUPLICATES: Every question stem and concept must be 100% unique in the returned array.
+4. MCQ FORMAT ({mcq_count} questions): 4 distinct, clear options ("A. ...", "B. ...", "C. ...", "D. ..."). Randomize the correct answer position across A, B, C, D.
+5. TYPING FORMAT ({typing_count} question): Free-text typing question asking the candidate for a brief technical explanation.
+6. {hr_instruction}
 
-CRITICAL DEDUPLICATION REQUIREMENT:
-- EVERY QUESTION MUST BE COMPLETELY UNIQUE AND FREELY RANDOMIZED. Absolutely zero duplicate question stems or repeated concepts in the JSON array!
-- Match the questions ACCURATELY to the domain and difficulty level!
-- {hr_instruction}
-
-STRICT FORMAT RULES:
-1. Generate EXACTLY {count} questions total.
-2. EXACTLY {mcq_count} questions MUST BE MULTIPLE CHOICE ('mcq' or 'true_false') with 4 distinct options ("A. ...", "B. ...", "C. ...", "D. ...").
-3. EXACTLY {typing_count} question(s) MUST BE FREE-TEXT TYPING QUESTIONS ('text' or 'scenario').
-4. RANDOMIZE MCQ CORRECT ANSWERS: Vary the correct answer position randomly across "A", "B", "C", and "D". DO NOT always make Option A the correct answer!
-
-Return ONLY a valid JSON array of {count} objects matching this JSON schema:
+Return ONLY a valid JSON array of {count} objects matching this schema:
 [
   {{
     "id": "q_1",
-    "question": "string",
+    "question": "Clear, understandable question statement?",
     "type": "mcq | true_false | text | scenario",
     "difficulty": "{difficulty}",
     "technology": "specific tech from selected topics",
-    "options": ["A...", "B...", "C...", "D..."] (REQUIRED if type is mcq or true_false),
-    "correctAnswer": "string",
-    "explanation": "string",
-    "keywords": ["string", "string"]
+    "options": ["A. Clear option 1", "B. Clear option 2", "C. Clear option 3", "D. Clear option 4"],
+    "correctAnswer": "A. Clear option 1",
+    "explanation": "Clear explanation of the correct answer.",
+    "keywords": ["key1", "key2"]
   }}
 ]
 Output raw JSON array only."""
@@ -134,7 +307,7 @@ Output raw JSON array only."""
             req_data = json.dumps({
                 "model": "meta/llama-3.3-70b-instruct",
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
+                "temperature": 0.65,
                 "max_tokens": 4096
             }).encode('utf-8')
 
@@ -194,8 +367,8 @@ Output raw JSON array only."""
                                 "technology": tech_name,
                                 "options": opts,
                                 "correctAnswer": correct,
-                                "explanation": q.get("explanation", f"Core technical principles of {tech_name}."),
-                                "keywords": q.get("keywords", [tech_name, "technical"])
+                                "explanation": q.get("explanation", f"Key technical principles behind {tech_name}."),
+                                "keywords": q.get("keywords", [tech_name, "interview"])
                             })
 
                             if len(formatted_questions) >= count:
@@ -206,72 +379,79 @@ Output raw JSON array only."""
         except Exception as e:
             print(f"[Python API Error] Exception during live AI call: {e}")
 
-    # Algorithmic Dynamic Fallback Generator (0% Hardcoded Static Questions)
+    # Clear Human-Readable Fallback Generator
     seen_stems = set()
     fallback_questions = []
     typing_indices = set([count - 1])
 
-    # Dynamic concept descriptors to synthesize non-static questions on demand
-    core_domains = {
-        "Python": ["CPython Memory Management", "Asyncio Event Loop Concurrency", "Global Interpreter Lock (GIL) Mechanics", "Descriptor Protocol and Metaclasses", "Generators and Memory Optimization"],
-        "JavaScript": ["V8 Engine Hidden Classes and ICs", "Event Loop Microtask vs Macrotask Execution", "Closure Memory Scoping and GC", "Prototypal Inheritance Chain", "Asynchronous Promise Pipelines"],
-        "SQL": ["B-Tree Indexing and Hash Join Execution", "Transaction Isolation Levels and Range Locks", "MVCC Concurrency in Relational Databases", "Recursive Common Table Expressions (CTEs)", "Query Optimizer Execution Plans"],
-        "HTML": ["Critical Rendering Path and CSSOM Blocking", "Shadow DOM Scoping and Encapsulation", "Content Security Policy (CSP) Strict Nonces", "Semantic Accessibility Landmarks", "Asynchronous vs Deferred Script Parsing"],
-        "CSS": ["Block Formatting Context (BFC) Container Isolation", "Stacking Context Generation Rules", "Container Queries vs Viewport Media Queries", "Flexbox & Grid Alignment Calculations", "Hardware-Accelerated GPU Layers"]
-    }
-
     for i in range(count):
         tech = selected_techs[i % len(selected_techs)]
         is_typing = (i in typing_indices)
-        tech_concepts = core_domains.get(tech, [f"{tech} Architecture", f"{tech} Performance", f"{tech} Scalability"])
-        concept = random.choice(tech_concepts)
+
+        tech_pool = (
+            CLEAR_HUMAN_BANK.get(tech, {}).get(difficulty)
+            or CLEAR_HUMAN_BANK.get(tech, {}).get("Medium")
+            or CLEAR_HUMAN_BANK.get(tech, {}).get("Easy")
+            or []
+        )
+
+        available = [item for item in tech_pool if item["q"].lower() not in seen_stems]
 
         if is_typing:
-            q_text = f"Explain the architectural principles, trade-offs, and optimization strategies concerning {concept} in production {tech} systems."
+            q_text = f"Explain the core technical principles, architectural trade-offs, and best practices when building scalable systems with {tech}."
             if q_text.lower() in seen_stems:
-                q_text = f"Describe how to diagnose performance bottlenecks and enforce best practices for {concept} in {tech}."
+                q_text = f"Describe how to debug common bottlenecks and optimize performance in a production {tech} application."
             seen_stems.add(q_text.lower())
 
             fallback_questions.append({
-                "id": f"py_dyn_{i+1}_{int(time.time())}_{random.randint(100, 999)}",
+                "id": f"py_human_{i+1}_{int(time.time())}",
                 "question": q_text,
                 "type": "text",
                 "difficulty": difficulty,
                 "technology": tech,
-                "correctAnswer": f"Clear technical explanation addressing {concept} in {tech} with appropriate architectural trade-offs.",
-                "explanation": f"Deep understanding of {concept} is critical when designing robust {tech} solutions.",
-                "keywords": [tech, "architecture", "optimization"]
+                "correctAnswer": f"Clear technical explanation addressing {tech} architecture and performance considerations.",
+                "explanation": f"Understanding {tech} core design principles is essential for building production systems.",
+                "keywords": [tech, "architecture", "best practices"]
             })
-        else:
-            q_text = f"In {tech} ({difficulty} level), which statement correctly describes the operational mechanism or best practice regarding {concept}?"
-            counter = 1
-            while q_text.lower() in seen_stems:
-                q_text = f"Regarding {concept} in {tech} ({difficulty} scenario #{counter}), which statement accurately reflects runtime behavior?"
-                counter += 1
-
-            seen_stems.add(q_text.lower())
-
-            raw_opts = [
-                f"It enforces deterministic memory and execution behavior for {concept} under {difficulty} workload conditions.",
-                f"It bypasses runtime security checks and degrades garbage collection efficiency.",
-                f"It restricts execution strictly to synchronous single-threaded event frames.",
-                f"None of the above"
-            ]
-            opts, correct_ans = shuffle_options_with_correct_pos(raw_opts)
+        elif available:
+            random.shuffle(available)
+            item = available.pop(0)
+            seen_stems.add(item["q"].lower())
+            opts, correct_ans = shuffle_options_with_correct_pos(item["opts"])
 
             fallback_questions.append({
-                "id": f"py_dyn_{i+1}_{int(time.time())}_{random.randint(100, 999)}",
+                "id": f"py_human_{i+1}_{int(time.time())}",
+                "question": item["q"],
+                "type": "mcq",
+                "difficulty": difficulty,
+                "technology": tech,
+                "options": opts,
+                "correctAnswer": correct_ans,
+                "explanation": item["exp"],
+                "keywords": [tech, "fundamentals"]
+            })
+        else:
+            q_text = f"When working with {tech} at a {difficulty} level, which engineering practice ensures optimal performance and maintainability?"
+            seen_stems.add(q_text.lower())
+            opts, correct_ans = shuffle_options_with_correct_pos([
+                f"Following clean modular structure, proper resource cleanup, and avoiding unhandled exceptions in {tech}.",
+                f"Bypassing input validation and storing sensitive credentials directly in source code.",
+                f"Disabling garbage collection and executing all functions synchronously.",
+                f"None of the above"
+            ])
+            fallback_questions.append({
+                "id": f"py_human_{i+1}_{int(time.time())}",
                 "question": q_text,
                 "type": "mcq",
                 "difficulty": difficulty,
                 "technology": tech,
                 "options": opts,
                 "correctAnswer": correct_ans,
-                "explanation": f"Under high-performance {tech} engineering, {concept} governs runtime stability and execution efficiency.",
-                "keywords": [tech, "architecture", "internals"]
+                "explanation": f"Writing modular and well-structured code is essential for maintainable {tech} software.",
+                "keywords": [tech, "clean code"]
             })
 
-    return {"questions": fallback_questions, "source": "Algorithmic Live Generator"}
+    return {"questions": fallback_questions, "source": "Human-Readable AI Engine"}
 
 @app.post("/evaluate")
 def evaluate_answer(payload: EvaluateRequest):
@@ -281,7 +461,7 @@ def evaluate_answer(payload: EvaluateRequest):
 
     if api_key:
         try:
-            prompt = f"""Evaluate candidate answer semantically.
+            prompt = f"""Evaluate candidate answer semantically in clear plain language.
 Question: "{q.get('question')}"
 Technology: "{q.get('technology')}"
 Difficulty: "{q.get('difficulty')}"
@@ -294,10 +474,10 @@ Return ONLY valid JSON matching this schema:
   "score": 0 to 10 (integer),
   "isCorrect": boolean,
   "correctAnswer": "string",
-  "explanation": "string detailed explanation",
-  "commonMistakes": "string common candidate pitfalls",
+  "explanation": "clear, simple explanation",
+  "commonMistakes": "clear common mistakes to avoid",
   "keywordsMatched": ["string"],
-  "feedbackSummary": "string short verdict"
+  "feedbackSummary": "short verdict"
 }}
 Output raw JSON object only."""
 
@@ -335,9 +515,9 @@ Output raw JSON object only."""
                             "userAnswer": user_ans,
                             "correctAnswer": eval_data.get("correctAnswer") or q.get("correctAnswer"),
                             "explanation": eval_data.get("explanation") or q.get("explanation"),
-                            "commonMistakes": eval_data.get("commonMistakes") or "Vague explanation without concrete STAR steps.",
+                            "commonMistakes": eval_data.get("commonMistakes") or "Vague response without key technical terms.",
                             "keywordsMatched": eval_data.get("keywordsMatched") or q.get("keywords", []),
-                            "feedbackSummary": eval_data.get("feedbackSummary") or "Response processed"
+                            "feedbackSummary": eval_data.get("feedbackSummary") or "Response evaluated"
                         }
                     }
         except Exception as e:
