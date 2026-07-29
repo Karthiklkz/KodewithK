@@ -10,9 +10,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-# Load environment variables from .env.local in parent folder or current folder
+# Load environment variables
+local_env = os.path.join(os.path.dirname(__file__), ".env")
 parent_env = os.path.join(os.path.dirname(__file__), "../.env.local")
-if os.path.exists(parent_env):
+if os.path.exists(local_env):
+    load_dotenv(local_env)
+elif os.path.exists(parent_env):
     load_dotenv(parent_env)
 else:
     load_dotenv()
