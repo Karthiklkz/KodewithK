@@ -28,26 +28,9 @@ export const Footer: React.FC<FooterProps> = ({ onClearSession }) => {
           </div>
         </div>
 
-        {/* Middle Badges */}
-        <div className="flex items-center gap-4 text-xs font-mono">
-          <span className="flex items-center gap-1 text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-            <ShieldCheck className="w-3.5 h-3.5" /> Zero Database Storage
-          </span>
-          <span className="flex items-center gap-1 text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-full border border-cyan-500/20">
-            <Zap className="w-3.5 h-3.5" /> 30s Auto Purge
-          </span>
-        </div>
-
-        {/* Right Action */}
-        <div className="flex items-center gap-3">
-          {onClearSession && (
-            <button
-              onClick={onClearSession}
-              className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-3 py-1.5 rounded-lg border border-rose-500/30 transition-colors font-mono"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Purge Memory Cache
-            </button>
-          )}
+        {/* Right Action - Simple copyright */}
+        <div className="text-xs text-slate-500 font-mono">
+          &copy; {new Date().getFullYear()} KodeWithK. All rights reserved.
         </div>
       </div>
     </footer>

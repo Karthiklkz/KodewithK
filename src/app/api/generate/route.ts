@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateNVIDIAQuestions } from '@/lib/nvidiaClient';
+import { generateAIQuestions } from '@/lib/nvidiaClient';
 import { sessionStore } from '@/lib/sessionStore';
 import { generateSessionId } from '@/lib/utils';
 import { Difficulty, InterviewSession, QuestionCount } from '@/lib/types';
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // Fallback to TypeScript AI engine if Python server is not reachable
     if (!questions || questions.length === 0) {
-      questions = await generateNVIDIAQuestions(
+      questions = await generateAIQuestions(
         targetTechs,
         targetDifficulty,
         targetCount,

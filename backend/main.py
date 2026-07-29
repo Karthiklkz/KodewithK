@@ -8,6 +8,14 @@ from typing import List, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load environment variables from .env.local in parent folder or current folder
+parent_env = os.path.join(os.path.dirname(__file__), "../.env.local")
+if os.path.exists(parent_env):
+    load_dotenv(parent_env)
+else:
+    load_dotenv()
 
 app = FastAPI(
     title="KodeWithK Live AI Engine API",
@@ -41,9 +49,7 @@ class EvaluateRequest(BaseModel):
     apiKey: Optional[str] = None
 
 def get_active_api_key(provided_key: Optional[str]) -> str:
-    key = (provided_key or os.environ.get("NVIDIA_API_KEY", "")).strip()
-    if key and not key.startswith("nvapi-"):
-        key = f"nvapi-{key}"
+    key = (provided_key or os.environ.get("GROQ_API_KEY", "")).strip()
     return key
 
 def shuffle_options_with_correct_pos(raw_options: List[str]) -> tuple[List[str], str]:
@@ -79,6 +85,12 @@ def generate_questions(payload: QuestionRequest):
     count = payload.questionCount if payload.questionCount in [5, 10, 15, 20, 25, 30] else 5
     api_key = get_active_api_key(payload.apiKey)
 
+    print("\n=================== [BACKEND] /generate REQUEST ===================")
+    print(f"Selected Techs: {selected_techs}")
+    print(f"Difficulty: {difficulty}")
+    print(f"Question Count: {count}")
+    print(f"API Key Present: {'Yes' if api_key else 'No'} (Length: {len(api_key) if api_key else 0})")
+
     has_hr_selected = any(t in HR_SKILLS_SET for t in selected_techs)
     typing_count = max(1, round(count * 0.2))
     mcq_count = count - typing_count
@@ -96,8 +108,30 @@ def generate_questions(payload: QuestionRequest):
         "Expert": "Target principal architects: Ask deep technical questions on runtime internals, low-level optimizations, lockless algorithms, and system design."
     }.get(difficulty, "Match requested difficulty accurately.")
 
+    # Dynamic sub-topics to guarantee question diversity and avoid repetition
+    tech_sub_topics = {
+        "Python": ["data types", "control flow", "list comprehensions", "generators", "decorators", "OOP", "file handling", "exception handling", "lambdas", "built-in functions", "operators"],
+        "JavaScript": ["event loop", "promises", "async/await", "closures", "prototypes", "scope", "DOM", "destructuring", "arrays", "arrow functions"],
+        "TypeScript": ["generics", "interfaces", "types", "enums", "union types", "type guards", "utility types", "strict typing"],
+        "SQL": ["joins", "indexes", "subqueries", "aggregations", "transactions", "grouping", "constraints", "window functions"],
+        "Generative AI": ["prompting", "fine-tuning", "transformers", "embeddings", "RAG", "attention", "tokenization", "LLM parameters"],
+        "Deep Learning": ["neural networks", "activation functions", "backpropagation", "loss functions", "optimizers", "regularization", "hyperparameters", "CNNs", "RNNs"]
+    }
+
+    focus_sub_topics = []
+    for tech in selected_techs:
+        sub_list = tech_sub_topics.get(tech)
+        if sub_list:
+            focus_sub_topics.extend(random.sample(sub_list, min(3, len(sub_list))))
+    
+    focus_instruction = ""
+    if focus_sub_topics:
+        focus_instruction = f" Focus your questions primarily around these random sub-topics: {', '.join(focus_sub_topics)}."
+
+    seed = random.randint(1, 1000000)
     prompt = f"""You are a Senior Technical Interviewer at Google, NVIDIA, and Meta.
 Generate EXACTLY {count} clear, natural, highly understandable interview questions based on topics [{', '.join(selected_techs)}] and difficulty "{difficulty}".
+Session Seed: {seed} (Use this seed to select a completely different set of questions than in previous sessions to ensure variety).{focus_instruction}
 
 STRICT QUALITY RULES:
 1. UNDERSTANDABLE & CLEAR LANGUAGE: Ask clear, plain, professional interview questions that real software engineers easily understand. Avoid awkward, convoluted, or robotic phrasing.
@@ -126,27 +160,41 @@ Output raw JSON array only."""
 
     if api_key:
         try:
+            if api_key.startswith("gsk_"):
+                api_url = "https://api.groq.com/openai/v1/chat/completions"
+                model_name = "llama-3.3-70b-versatile"
+                temperature = 0.0
+            else:
+                raise ValueError("Only Groq keys (gsk_...) are supported.")
+
+            print(f"\n[BACKEND] Sending Request to API ({api_url}) using model ({model_name})...")
+            print(f"[BACKEND] Prompt Sent to LLM:\n{prompt}\n--------------------------------------------------")
+            
             req_data = json.dumps({
-                "model": "meta/llama-3.3-70b-instruct",
+                "model": model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.7,
+                "temperature": temperature,
                 "max_tokens": 4096
             }).encode('utf-8')
 
             req = urllib.request.Request(
-                "https://integrate.api.nvidia.com/v1/chat/completions",
+                api_url,
                 data=req_data,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
+                    "Authorization": f"Bearer {api_key}",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 },
                 method="POST"
             )
 
             with urllib.request.urlopen(req, timeout=30) as response:
                 res_body = response.read().decode('utf-8')
+                print(f"\n[BACKEND] Received Response from LLM API ({model_name}).")
+                print(f"[BACKEND] Raw Response Body:\n{res_body}\n--------------------------------------------------")
                 res_json = json.loads(res_body)
                 content = res_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+                print(f"[BACKEND] Parsed LLM Content:\n{content}\n--------------------------------------------------")
                 
                 start_idx = content.find("[")
                 end_idx = content.rfind("]")
@@ -199,9 +247,10 @@ Output raw JSON array only."""
                         if len(formatted_questions) == count:
                             return {"questions": formatted_questions, "source": "Live NVIDIA Llama AI Engine"}
         except Exception as e:
-            print(f"[Python API Error] Exception during live AI call: {e}")
+            print(f"\n[BACKEND ERROR] Exception during live AI call: {e}")
 
     # Pure Algorithmic Dynamic Fallback (ZERO stored question dictionaries)
+    print("\n[BACKEND] Bypassed or failed NVIDIA AI call. Using Pure Algorithmic Dynamic Fallback Engine.")
     seen_stems = set()
     fallback_questions = []
     typing_indices = set([count - 1])
@@ -262,6 +311,11 @@ def evaluate_answer(payload: EvaluateRequest):
     user_ans = payload.userAnswer
     api_key = get_active_api_key(payload.apiKey)
 
+    print("\n=================== [BACKEND] /evaluate REQUEST ===================")
+    print(f"Question: {q.get('question')}")
+    print(f"User Answer: {user_ans}")
+    print(f"API Key Present: {'Yes' if api_key else 'No'} (Length: {len(api_key) if api_key else 0})")
+
     if api_key:
         try:
             prompt = f"""Evaluate candidate answer semantically in clear plain language.
@@ -284,27 +338,41 @@ Return ONLY valid JSON matching this schema:
 }}
 Output raw JSON object only."""
 
+            if api_key.startswith("gsk_"):
+                api_url = "https://api.groq.com/openai/v1/chat/completions"
+                model_name = "llama-3.3-70b-versatile"
+                temperature = 0.0
+            else:
+                raise ValueError("Only Groq keys (gsk_...) are supported.")
+
+            print(f"\n[BACKEND] Sending Evaluate Request to API ({api_url}) using model ({model_name})...")
+            print(f"[BACKEND] Prompt Sent to LLM:\n{prompt}\n--------------------------------------------------")
+            
             req_data = json.dumps({
-                "model": "meta/llama-3.3-70b-instruct",
+                "model": model_name,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
+                "temperature": temperature,
                 "max_tokens": 1024
             }).encode('utf-8')
 
             req = urllib.request.Request(
-                "https://integrate.api.nvidia.com/v1/chat/completions",
+                api_url,
                 data=req_data,
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
+                    "Authorization": f"Bearer {api_key}",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 },
                 method="POST"
             )
 
             with urllib.request.urlopen(req, timeout=20) as response:
                 res_body = response.read().decode('utf-8')
+                print(f"\n[BACKEND] Received Evaluate Response from LLM API ({model_name}).")
+                print(f"[BACKEND] Raw Response Body:\n{res_body}\n--------------------------------------------------")
                 res_json = json.loads(res_body)
                 content = res_json.get("choices", [{}])[0].get("message", {}).get("content", "")
+                print(f"[BACKEND] Parsed LLM Evaluate Content:\n{content}\n--------------------------------------------------")
                 
                 start_idx = content.find("{")
                 end_idx = content.rfind("}")
@@ -324,8 +392,9 @@ Output raw JSON object only."""
                         }
                     }
         except Exception as e:
-            print(f"[Python API Eval Error]: {e}")
+            print(f"\n[BACKEND ERROR] [Python API Eval Error]: {e}")
 
+    print("\n[BACKEND] Bypassed or failed NVIDIA AI evaluation. Using local fallback scoring.")
     is_correct = False
     score = 5
     if q.get("type") in ["mcq", "true_false"]:

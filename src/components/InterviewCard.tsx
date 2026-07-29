@@ -297,22 +297,22 @@ export const InterviewCard: React.FC<InterviewCardProps> = ({
             )}
 
             {/* Submit & Navigation Bar */}
-            <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-4">
+            <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
               <button
                 onClick={onPrevious}
                 disabled={currentIndex === 0}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white text-xs font-mono disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 hover:text-white text-xs font-mono disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <ArrowLeft className="w-3.5 h-3.5" /> Previous
               </button>
 
-              <div className="flex items-center gap-3">
+              <div className="w-full sm:w-auto flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
                 <button
                   onClick={() => onEvaluateAnswer('Skipped', timeSpent)}
-                  className="px-4 py-2 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-rose-400 text-xs font-mono transition-colors flex items-center gap-1.5"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-950 hover:bg-slate-900 border border-slate-800 text-slate-400 hover:text-rose-400 text-xs font-mono transition-colors flex items-center justify-center gap-1.5"
                 >
                   <span>Skip</span>
-                  <kbd className="px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 text-slate-400 rounded">
+                  <kbd className="hidden sm:inline px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 text-slate-400 rounded">
                     Space
                   </kbd>
                 </button>
@@ -320,17 +320,17 @@ export const InterviewCard: React.FC<InterviewCardProps> = ({
                 <button
                   onClick={handleSubmit}
                   disabled={isEvaluating}
-                  className="flex items-center gap-2 px-8 py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 text-white font-bold text-sm shadow-lg shadow-cyan-500/20 hover:scale-105 transition-all disabled:opacity-50"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 text-white font-bold text-sm shadow-lg shadow-cyan-500/20 hover:scale-105 transition-all disabled:opacity-50"
                 >
                   {isEvaluating ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Evaluating Answer...</span>
+                      <span>Evaluating...</span>
                     </>
                   ) : (
                     <>
                       <span>Submit Answer</span>
-                      <kbd className="px-1.5 py-0.5 text-[10px] bg-cyan-700/50 border border-cyan-400 text-white rounded font-mono">
+                      <kbd className="hidden sm:inline px-1.5 py-0.5 text-[10px] bg-cyan-700/50 border border-cyan-400 text-white rounded font-mono">
                         Enter
                       </kbd>
                       <Send className="w-4 h-4" />

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { evaluateNVIDIAAnswer } from '@/lib/nvidiaClient';
+import { evaluateAIAnswer } from '@/lib/nvidiaClient';
 import { sessionStore } from '@/lib/sessionStore';
 import { Question, QuestionResult, AnswerEvaluation } from '@/lib/types';
 
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!evaluation) {
-      evaluation = await evaluateNVIDIAAnswer(question, userAnswer, apiKey);
+      evaluation = await evaluateAIAnswer(question, userAnswer, apiKey);
     }
 
     const questionResult: QuestionResult = {

@@ -14,7 +14,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "KodeWithK – AI Technical Interview Platform (Developed by Karthik)",
-  description: "Master technical coding and engineering interviews using NVIDIA AI. Dynamic question generation, instant semantic grading, and performance analytics. Developed by Karthik.",
+  description: "Master technical coding and engineering interviews using advanced AI. Dynamic question generation, instant semantic grading, and performance analytics. Developed by Karthik.",
+  icons: {
+    icon: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%230ea5e9%22/><text y=%2274%22 x=%2226%22 font-size=%2268%22 font-weight=%22900%22 font-family=%22sans-serif%22 fill=%22white%22>K</text></svg>",
+  },
 };
 
 export default function RootLayout({

@@ -20,7 +20,7 @@ import {
   FinalAnalytics,
   QuestionCount,
 } from '@/lib/types';
-import { generateNVIDIAQuestions, evaluateNVIDIAAnswer } from '@/lib/nvidiaClient';
+import { generateAIQuestions, evaluateAIAnswer } from '@/lib/nvidiaClient';
 
 const RENDER_BACKEND_URL = 'https://kodewithk.onrender.com';
 
@@ -31,13 +31,38 @@ export default function Home() {
   >('landing');
 
   // UI & Theme state
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [apiKey, setApiKey] = useState<string>('');
+  const theme = 'dark';
+  const [apiKey, setApiKey] = useState<string>(process.env.NEXT_PUBLIC_GROQ_API_KEY || '');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   // Configuration state
   const [questionCount, setQuestionCount] = useState<QuestionCount>(5);
   const [selectedTechs, setSelectedTechs] = useState<string[]>(['Python']);
+
+  // Suppress Next.js / React DevTools console prompts
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const originalConsoleInfo = console.info;
+      console.info = (...args) => {
+        if (args[0] && typeof args[0] === 'string' && args[0].includes('React DevTools')) {
+          return;
+        }
+        originalConsoleInfo(...args);
+      };
+
+      const originalConsoleLog = console.log;
+      console.log = (...args) => {
+        if (
+          args[0] &&
+          typeof args[0] === 'string' &&
+          (args[0].includes('React DevTools') || args[0].includes('Download the React DevTools'))
+        ) {
+          return;
+        }
+        originalConsoleLog(...args);
+      };
+    }
+  }, []);
   const [difficulty, setDifficulty] = useState<Difficulty>('Medium');
 
   // Interview execution state
@@ -54,22 +79,24 @@ export default function Home() {
 
   // Load stored API key if exists in localStorage
   useEffect(() => {
-    const savedKey = localStorage.getItem('nvidia_api_key');
-    if (savedKey) setApiKey(savedKey);
+    const savedKey = localStorage.getItem('groq_api_key');
+    if (savedKey) {
+      setApiKey(savedKey);
+    } else {
+      setApiKey(process.env.NEXT_PUBLIC_GROQ_API_KEY || '');
+    }
   }, []);
 
   const handleSaveApiKey = (key: string) => {
     setApiKey(key);
     if (key) {
-      localStorage.setItem('nvidia_api_key', key);
+      localStorage.setItem('groq_api_key', key);
     } else {
-      localStorage.removeItem('nvidia_api_key');
+      localStorage.removeItem('groq_api_key');
     }
   };
 
-  const handleToggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
+
 
   // Start interview generation process
   const handleStartInterview = async () => {
@@ -126,7 +153,7 @@ export default function Home() {
 
     // 3. Client dynamic engine fallback if network offline
     if (!questionsList || questionsList.length === 0) {
-      questionsList = await generateNVIDIAQuestions(
+      questionsList = await generateAIQuestions(
         targetTechs,
         difficulty,
         questionCount,
@@ -201,7 +228,7 @@ export default function Home() {
 
     // 3. Client evaluator fallback
     if (!evaluation) {
-      evaluation = await evaluateNVIDIAAnswer(currentQ, userAnswer, apiKey);
+      evaluation = await evaluateAIAnswer(currentQ, userAnswer, apiKey);
     }
 
     if (!questionResult) {
@@ -324,13 +351,9 @@ export default function Home() {
   };
 
   return (
-    <div
-      className={`min-h-screen flex flex-col transition-colors duration-300 font-sans ${
-        theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
-      }`}
-    >
+    <div className="min-h-screen flex flex-col font-sans bg-slate-950 text-slate-100">
       {/* Background Particles Visual FX */}
-      <ParticleBackground theme={theme} />
+      <ParticleBackground theme="dark" />
 
       {/* Top Navbar */}
       <Navbar
@@ -338,8 +361,7 @@ export default function Home() {
         onNavigateHome={() => setCurrentStep('landing')}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         hasApiKey={Boolean(apiKey)}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
+        apiKey={apiKey}
       />
 
       {/* Main Content Area */}

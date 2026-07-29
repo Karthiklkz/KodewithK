@@ -216,14 +216,14 @@ export const TechSelector: React.FC<TechSelectorProps> = ({
       </div>
 
       {/* Bottom Floating Bar */}
-      <div className="sticky bottom-4 z-40 bg-slate-950/90 border border-slate-800 p-4 rounded-2xl backdrop-blur-xl shadow-2xl flex items-center justify-between">
-        <div className="text-xs text-slate-400 font-mono">
+      <div className="sticky bottom-4 z-40 bg-slate-950/90 border border-slate-800 p-4 rounded-2xl backdrop-blur-xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="text-xs text-slate-400 font-mono text-center sm:text-left">
           {selectedTechs.length === 0 ? (
             <span className="text-amber-400">⚠️ Please select at least 1 topic to continue.</span>
           ) : (
             <span>
-              Session Setup: <strong className="text-cyan-400 font-bold">{questionCount} Questions</strong> —{' '}
-              <span className="text-white font-bold">{selectedTechs.join(', ')}</span>
+              Session Setup: <strong className="text-cyan-400 font-bold">{questionCount} Questions</strong>
+              <span className="hidden sm:inline"> — <span className="text-white font-bold">{selectedTechs.join(', ')}</span></span>
             </span>
           )}
         </div>
@@ -231,7 +231,7 @@ export const TechSelector: React.FC<TechSelectorProps> = ({
         <button
           onClick={onNext}
           disabled={selectedTechs.length === 0}
-          className={`flex items-center gap-2 px-8 py-3 rounded-xl font-bold text-sm transition-all ${
+          className={`w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold text-sm transition-all ${
             selectedTechs.length > 0
               ? 'bg-gradient-to-r from-cyan-500 via-teal-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20 hover:scale-105'
               : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'

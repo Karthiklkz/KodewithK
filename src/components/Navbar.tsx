@@ -1,15 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Key, Sun, Moon, Terminal, Sparkles } from 'lucide-react';
+import { Key, Terminal, Sparkles } from 'lucide-react';
 
 interface NavbarProps {
   currentStep: 'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics';
   onNavigateHome: () => void;
   onOpenApiKeyModal: () => void;
   hasApiKey: boolean;
-  theme: 'dark' | 'light';
-  onToggleTheme: () => void;
+  apiKey?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -17,8 +16,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigateHome,
   onOpenApiKeyModal,
   hasApiKey,
-  theme,
-  onToggleTheme,
+  apiKey,
 }) => {
   const steps = [
     { key: 'landing', label: 'Home' },
@@ -54,7 +52,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </div>
             <p className="text-[10px] text-slate-400 font-mono tracking-wider uppercase flex items-center gap-1">
-              <Terminal className="w-3 h-3 text-cyan-400" /> Technical AI Prep • <span className="text-cyan-400 font-semibold normal-case">Developed by Karthik</span>
+              <Terminal className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span className="hidden sm:inline">Technical AI Prep • </span>
+              <span className="text-cyan-400 font-semibold normal-case">By Karthik</span>
             </p>
           </div>
         </button>
@@ -106,27 +106,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
                 : 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 shadow-md shadow-amber-500/10'
             }`}
-            title="Configure NVIDIA AI API Key"
+            title="Configure AI API Key"
           >
             <Key className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">
-              {hasApiKey ? 'NVIDIA Key Active' : 'Set NVIDIA Key'}
+              {hasApiKey ? (
+                (() => {
+                  if (apiKey?.startsWith('gsk_')) return 'Groq Key Active';
+                  return 'AI Key Active';
+                })()
+              ) : (
+                'Set AI Key'
+              )}
             </span>
             <span className="w-2 h-2 rounded-full animate-pulse bg-current" />
           </button>
 
-          {/* Theme Toggle */}
-          <button
-            onClick={onToggleTheme}
-            className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors"
-            title="Toggle Theme"
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-4 h-4 text-amber-400" />
-            ) : (
-              <Moon className="w-4 h-4 text-indigo-400" />
-            )}
-          </button>
+
         </div>
       </div>
     </header>

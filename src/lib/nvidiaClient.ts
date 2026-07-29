@@ -3,9 +3,7 @@ import { generateMockQuestions, evaluateAnswerLocally } from './mockData';
 
 function formatApiKey(key?: string): string {
   if (!key) return '';
-  const trimmed = key.trim();
-  if (trimmed.startsWith('nvapi-')) return trimmed;
-  return `nvapi-${trimmed}`;
+  return key.trim();
 }
 
 const HR_SKILLS_SET = new Set([
@@ -14,17 +12,17 @@ const HR_SKILLS_SET = new Set([
   'HR & Behavioral Leadership', 'HR'
 ]);
 
-export async function generateNVIDIAQuestions(
+export async function generateAIQuestions(
   selectedTechs: string[],
   difficulty: Difficulty,
   questionCount: number = 5,
   mode: InterviewMode = 'technical',
   apiKey?: string
 ): Promise<Question[]> {
-  const activeKey = formatApiKey(apiKey || process.env.NVIDIA_API_KEY);
+  const activeKey = formatApiKey(apiKey || process.env.GROQ_API_KEY);
 
   if (!activeKey) {
-    console.log('[NVIDIA AI] No API key provided. Using dynamic question generator.');
+    console.log('[AI Engine] No API key provided. Using dynamic question generator.');
     return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
   }
 
@@ -43,8 +41,32 @@ export async function generateNVIDIAQuestions(
     Expert: "Target PRINCIPAL/STAFF ARCHITECT ENGINEERS: Ask EXTREMELY TOUGH, DEEP-INTERNALS interview questions! Focus on core runtime internals, lockless concurrency, memory barrier semantics, low-level optimization, and high-scale distributed system trade-offs."
   };
 
-  const prompt = `You are a Senior Technical and Engineering Interviewer at Google and NVIDIA.
+  const techSubTopics: Record<string, string[]> = {
+    Python: ["data types", "control flow", "list comprehensions", "generators", "decorators", "OOP", "file handling", "exception handling", "lambdas", "built-in functions", "operators"],
+    JavaScript: ["event loop", "promises", "async/await", "closures", "prototypes", "scope", "DOM", "destructuring", "arrays", "arrow functions"],
+    TypeScript: ["generics", "interfaces", "types", "enums", "union types", "type guards", "utility types", "strict typing"],
+    SQL: ["joins", "indexes", "subqueries", "aggregations", "transactions", "grouping", "constraints", "window functions"],
+    "Generative AI": ["prompting", "fine-tuning", "transformers", "embeddings", "RAG", "attention", "tokenization", "LLM parameters"],
+    "Deep Learning": ["neural networks", "activation functions", "backpropagation", "loss functions", "optimizers", "regularization", "hyperparameters", "CNNs", "RNNs"]
+  };
+
+  const focusSubTopics: string[] = [];
+  selectedTechs.forEach((tech) => {
+    const subList = techSubTopics[tech];
+    if (subList) {
+      const shuffled = [...subList].sort(() => 0.5 - Math.random());
+      focusSubTopics.push(...shuffled.slice(0, 3));
+    }
+  });
+
+  const focusInstruction = focusSubTopics.length > 0
+    ? ` Focus your questions primarily around these random sub-topics: ${focusSubTopics.join(', ')}.`
+    : '';
+
+  const seed = Math.floor(Math.random() * 1000000);
+  const prompt = `You are a Senior Technical and Engineering Interviewer.
 Use the selected topics [${selectedTechs.join(', ')}] and difficulty level "${difficulty}" to create exactly ${questionCount} unique interview questions.
+Session Seed: ${seed} (Use this random seed to select a completely different set of questions than in previous sessions to ensure variety).${focusInstruction}
 
 STRICT DIFFICULTY ENFORCEMENT (${difficulty}):
 - ${difficultyGuide[difficulty] || "Match requested difficulty precisely."}
@@ -75,23 +97,31 @@ Return ONLY a valid JSON array of ${questionCount} objects matching this JSON sc
 ]
 Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
 
+  let apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  let modelName = 'llama-3.3-70b-versatile';
+  let temperature = 0;
+
+  if (!activeKey.startsWith('gsk_')) {
+    throw new Error('Only Groq keys (gsk_...) are supported.');
+  }
+
   try {
-    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${activeKey}`,
       },
       body: JSON.stringify({
-        model: 'meta/llama-3.3-70b-instruct',
+        model: modelName,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.6,
+        temperature: temperature,
         max_tokens: 4096,
       }),
     });
 
     if (!response.ok) {
-      console.warn(`[NVIDIA AI] API request failed with status ${response.status}. Falling back to dynamic generator.`);
+      console.warn(`[AI Engine] API request failed with status ${response.status}. Falling back to dynamic generator.`);
       return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
     }
 
@@ -113,7 +143,7 @@ Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
           if (qText && !seenQuestions.has(qText)) {
             seenQuestions.add(qText);
             uniqueQuestions.push({
-              id: `nvidia_q_${uniqueQuestions.length + 1}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+              id: `ai_q_${uniqueQuestions.length + 1}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
               question: item.question || `Explain key concepts of ${selectedTechs[0]}`,
               type: item.type || 'mcq',
               difficulty: item.difficulty || difficulty,
@@ -140,20 +170,20 @@ Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
       }
     }
 
-    console.warn('[NVIDIA AI] Failed to parse JSON from response. Falling back to dynamic generator.');
+    console.warn('[AI Engine] Failed to parse JSON from response. Falling back to dynamic generator.');
     return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
   } catch (error) {
-    console.error('[NVIDIA AI] Exception while calling NVIDIA API:', error);
+    console.error('[AI Engine] Exception while calling LLM API:', error);
     return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
   }
 }
 
-export async function evaluateNVIDIAAnswer(
+export async function evaluateAIAnswer(
   question: Question,
   userAnswer: string,
   apiKey?: string
 ): Promise<AnswerEvaluation> {
-  const activeKey = formatApiKey(apiKey || process.env.NVIDIA_API_KEY);
+  const activeKey = formatApiKey(apiKey || process.env.GROQ_API_KEY);
 
   if (!activeKey) {
     return evaluateAnswerLocally(question, userAnswer);
@@ -181,17 +211,25 @@ Return ONLY valid JSON matching this schema:
 }
 Output raw JSON object only.`;
 
+  let apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  let modelName = 'llama-3.3-70b-versatile';
+  let temperature = 0;
+
+  if (!activeKey.startsWith('gsk_')) {
+    throw new Error('Only Groq keys (gsk_...) are supported.');
+  }
+
   try {
-    const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${activeKey}`,
       },
       body: JSON.stringify({
-        model: 'meta/llama-3.3-70b-instruct',
+        model: modelName,
         messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
+        temperature: temperature,
         max_tokens: 1024,
       }),
     });
@@ -223,7 +261,7 @@ Output raw JSON object only.`;
 
     return evaluateAnswerLocally(question, userAnswer);
   } catch (error) {
-    console.error('[NVIDIA AI Evaluation] Error:', error);
+    console.error('[AI Evaluation] Error:', error);
     return evaluateAnswerLocally(question, userAnswer);
   }
 }
