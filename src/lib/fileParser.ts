@@ -43,7 +43,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
     try {
       // Lazy load pdfjs-dist
       const pdfjs = await import('pdfjs-dist');
-      pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
       const arrayBuffer = await file.arrayBuffer();
       const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
@@ -63,8 +63,16 @@ export async function extractTextFromFile(file: File): Promise<string> {
       console.warn('PDFjs parsing error, attempting raw text decoding:', err);
       const text = await file.text();
       // Remove PDF binary markers roughly if fallback
-      const cleaned = text.replace(/[^\x20-\x7E\n\r\t]/g, ' ');
-      if (cleaned.length > 50) return cleaned;
+      const cleaned = text.replace(/[^\x20-\x7E\n\r\t]/g, ' ')
+                          .replace(/\s+/g, ' ')
+                          .trim();
+      
+      if (cleaned.startsWith('%PDF-') || cleaned.includes('/Root') || cleaned.includes('/Pages')) {
+        throw new Error('PDF parsing failed: returned raw binary structure.');
+      }
+      
+      if (cleaned.length > 50) return cleaned.slice(0, 8000);
+      throw err;
     }
   }
 
@@ -73,7 +81,8 @@ export async function extractTextFromFile(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = (e) => {
       const raw = (e.target?.result as string) || '';
-      resolve(raw.replace(/[^\x20-\x7E\n\r\t]/g, ' '));
+      const cleaned = raw.replace(/[^\x20-\x7E\n\r\t]/g, ' ');
+      resolve(cleaned.slice(0, 8000));
     };
     reader.readAsText(file);
   });

@@ -1,5 +1,5 @@
 export type Difficulty = 'Easy' | 'Medium' | 'Hard' | 'Expert';
-export type QuestionCount = 5 | 10 | 15 | 20 | 25 | 30;
+export type QuestionCount = 10 | 15 | 20 | 25 | 30;
 export type InterviewMode = 'technical' | 'hr';
 
 export type QuestionType = 

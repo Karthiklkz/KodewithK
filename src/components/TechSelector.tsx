@@ -36,7 +36,7 @@ export const TechSelector: React.FC<TechSelectorProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const questionCountOptions: QuestionCount[] = [5, 10, 15, 20, 25, 30];
+  const questionCountOptions: QuestionCount[] = [10, 15, 20, 25, 30];
 
   const handleCategorySelectAll = (categoryTechs: string[]) => {
     onSelectCategory(categoryTechs);

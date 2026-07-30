@@ -14,14 +14,16 @@ import {
   Terminal,
   Users,
   Quote,
+  FileText,
 } from 'lucide-react';
 import { TECH_CATEGORIES, HR_CATEGORIES } from '@/lib/mockData';
 
 interface LandingHeroProps {
   onStart: () => void;
+  onStartResumeQA: () => void;
 }
 
-export const LandingHero: React.FC<LandingHeroProps> = ({ onStart }) => {
+export const LandingHero: React.FC<LandingHeroProps> = ({ onStart, onStartResumeQA }) => {
   // Typing animation text phrases
   const phrases = [
     'Master Technical Coding & Behavioral Interviews',
@@ -135,15 +137,23 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onStart }) => {
               </button>
 
               <button
+                onClick={onStartResumeQA}
+                className="inline-flex items-center gap-2 px-6 py-4 rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-600/20 border border-indigo-500/30 hover:border-indigo-500/60 text-indigo-300 hover:text-white font-bold text-base backdrop-blur-md transition-all duration-300 hover:scale-105"
+              >
+                <FileText className="w-5 h-5 text-indigo-400" />
+                <span>Upload Resume & Chat</span>
+              </button>
+
+              <button
                 onClick={() => scrollToSection('how-it-works')}
-                className="inline-flex items-center gap-2 px-6 py-4 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-medium text-base backdrop-blur-md transition-all duration-300 hover:bg-slate-800/60"
+                className="inline-flex items-center gap-2 px-5 py-4 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-medium text-sm backdrop-blur-md transition-all duration-300 hover:bg-slate-800/60"
               >
                 <span>How It Works</span>
               </button>
 
               <button
                 onClick={() => scrollToSection('supported-tech')}
-                className="inline-flex items-center gap-2 px-6 py-4 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-medium text-base backdrop-blur-md transition-all duration-300 hover:bg-slate-800/60"
+                className="inline-flex items-center gap-2 px-5 py-4 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white font-medium text-sm backdrop-blur-md transition-all duration-300 hover:bg-slate-800/60"
               >
                 <Code2 className="w-4 h-4 text-cyan-400" />
                 <span>Explore Topics</span>

@@ -40,11 +40,28 @@ HR_SKILLS_SET = {
     'HR & Behavioral Leadership', 'HR'
 }
 
+def extract_skills_from_resume_py(text: str) -> List[str]:
+    common_skills = [
+        'Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Next.js',
+        'Django', 'Flask', 'Java', 'C++', 'Rust', 'Go', 'SQL', 'PostgreSQL',
+        'MongoDB', 'MySQL', 'AWS', 'Docker', 'Kubernetes', 'Generative AI',
+        'Deep Learning', 'Machine Learning', 'Git', 'HTML', 'CSS', 'Tailwind'
+    ]
+    found = []
+    text_lower = text.lower()
+    import re
+    for skill in common_skills:
+        pattern = r'\b' + re.escape(skill.lower()) + r'\b'
+        if re.search(pattern, text_lower):
+            found.append(skill)
+    return found if found else ['JavaScript', 'Python', 'SQL']
+
 class QuestionRequest(BaseModel):
-    selectedTechs: List[str]
+    selectedTechs: List[str] = []
     difficulty: str = "Medium"
     questionCount: int = 5
     apiKey: Optional[str] = None
+    resumeText: Optional[str] = None
 
 class EvaluateRequest(BaseModel):
     question: dict
@@ -83,12 +100,22 @@ def health_check():
 
 @app.post("/generate")
 def generate_questions(payload: QuestionRequest):
-    selected_techs = payload.selectedTechs if payload.selectedTechs else ["Python", "SQL"]
+    resume_text = payload.resumeText.strip() if payload.resumeText else ""
+    if resume_text:
+        resume_text = resume_text[:15000]
+    selected_techs = payload.selectedTechs if payload.selectedTechs else []
+    
+    if resume_text and not selected_techs:
+        selected_techs = extract_skills_from_resume_py(resume_text)
+    elif not selected_techs:
+        selected_techs = ["Python", "SQL"]
+
     difficulty = payload.difficulty or "Medium"
-    count = payload.questionCount if payload.questionCount in [5, 10, 15, 20, 25, 30] else 5
+    count = payload.questionCount if payload.questionCount in [10, 15, 20, 25, 30] else 10
     api_key = get_active_api_key(payload.apiKey)
 
     print("\n=================== [BACKEND] /generate REQUEST ===================")
+    print(f"Resume Provided: {'Yes' if resume_text else 'No'}")
     print(f"Selected Techs: {selected_techs}")
     print(f"Difficulty: {difficulty}")
     print(f"Question Count: {count}")
@@ -97,6 +124,11 @@ def generate_questions(payload: QuestionRequest):
     has_hr_selected = any(t in HR_SKILLS_SET for t in selected_techs)
     typing_count = max(1, round(count * 0.2))
     mcq_count = count - typing_count
+
+    if difficulty in ["Hard", "Expert"]:
+        typing_format_instruction = f"TYPING FORMAT ({typing_count} questions): Every typing question MUST be of type 'scenario' representing a complex, real-world troubleshooting, debugging, or system architecture challenge where the candidate must analyze and type their response."
+    else:
+        typing_format_instruction = f"TYPING FORMAT ({typing_count} questions): Free-text typing question asking the candidate for a brief technical explanation, scenario-based design trade-offs, or optimization choices."
 
     hr_instruction = (
         "Include questions from the selected HR/Behavioral topic."
@@ -111,28 +143,64 @@ def generate_questions(payload: QuestionRequest):
         "Expert": "Target principal architects: Ask deep technical questions on runtime internals, low-level optimizations, lockless algorithms, and system design."
     }.get(difficulty, "Match requested difficulty accurately.")
 
-    # Dynamic sub-topics to guarantee question diversity and avoid repetition
-    tech_sub_topics = {
-        "Python": ["data types", "control flow", "list comprehensions", "generators", "decorators", "OOP", "file handling", "exception handling", "lambdas", "built-in functions", "operators"],
-        "JavaScript": ["event loop", "promises", "async/await", "closures", "prototypes", "scope", "DOM", "destructuring", "arrays", "arrow functions"],
-        "TypeScript": ["generics", "interfaces", "types", "enums", "union types", "type guards", "utility types", "strict typing"],
-        "SQL": ["joins", "indexes", "subqueries", "aggregations", "transactions", "grouping", "constraints", "window functions"],
-        "Generative AI": ["prompting", "fine-tuning", "transformers", "embeddings", "RAG", "attention", "tokenization", "LLM parameters"],
-        "Deep Learning": ["neural networks", "activation functions", "backpropagation", "loss functions", "optimizers", "regularization", "hyperparameters", "CNNs", "RNNs"]
-    }
-
-    focus_sub_topics = []
-    for tech in selected_techs:
-        sub_list = tech_sub_topics.get(tech)
-        if sub_list:
-            focus_sub_topics.extend(random.sample(sub_list, min(3, len(sub_list))))
-    
-    focus_instruction = ""
-    if focus_sub_topics:
-        focus_instruction = f" Focus your questions primarily around these random sub-topics: {', '.join(focus_sub_topics)}."
-
     seed = random.randint(1, 1000000)
-    prompt = f"""You are a Senior Technical Interviewer at Google, NVIDIA, and Meta.
+
+    if resume_text:
+        prompt = f"""You are a Senior Technical Interviewer at Google, NVIDIA, and Meta.
+Analyze the following resume text and generate EXACTLY {count} clear, natural, highly understandable technical interview questions based on the candidate's projects, work experience, and tech stack.
+
+Resume Content:
+---
+{resume_text}
+---
+
+STRICT QUALITY RULES:
+1. RELEVANCE TO RESUME: Every question must directly relate to a technology, skill, or project mentioned in the resume. Focus on the core tech stack and projects they did.
+2. SPECIFIC PROJECT/SCENARIO QUESTIONS: Include at least one or two questions that explicitly mention a project from their resume (e.g., "In your project [Project Name]...").
+3. UNDERSTANDABLE & CLEAR LANGUAGE: Ask clear, plain, professional interview questions that real software engineers easily understand. Avoid awkward, convoluted, or robotic phrasing.
+4. DIFFICULTY MATCH ({difficulty}):
+   - {difficulty_guide}
+5. NO DUPLICATES: Every question stem and concept must be 100% unique in the returned array.
+6. MCQ FORMAT ({mcq_count} questions): 4 distinct, clear options ("A. ...", "B. ...", "C. ...", "D. ..."). Randomize the correct answer position across A, B, C, D.
+7. {typing_format_instruction}
+
+Return ONLY a valid JSON array of {count} objects matching this schema:
+[
+  {{
+    "id": "q_1",
+    "question": "Clear, understandable question statement referencing their tech stack or project?",
+    "type": "mcq | true_false | text | scenario",
+    "difficulty": "{difficulty}",
+    "technology": "specific tech or project name from the resume",
+    "options": ["A. Clear option 1", "B. Clear option 2", "C. Clear option 3", "D. Clear option 4"],
+    "correctAnswer": "A. Clear option 1",
+    "explanation": "Clear explanation of the correct answer.",
+    "keywords": ["key1", "key2"]
+  }}
+]
+Output raw JSON array only."""
+    else:
+        # Dynamic sub-topics to guarantee question diversity and avoid repetition
+        tech_sub_topics = {
+            "Python": ["data types", "control flow", "list comprehensions", "generators", "decorators", "OOP", "file handling", "exception handling", "lambdas", "built-in functions", "operators"],
+            "JavaScript": ["event loop", "promises", "async/await", "closures", "prototypes", "scope", "DOM", "destructuring", "arrays", "arrow functions"],
+            "TypeScript": ["generics", "interfaces", "types", "enums", "union types", "type guards", "utility types", "strict typing"],
+            "SQL": ["joins", "indexes", "subqueries", "aggregations", "transactions", "grouping", "constraints", "window functions"],
+            "Generative AI": ["prompting", "fine-tuning", "transformers", "embeddings", "RAG", "attention", "tokenization", "LLM parameters"],
+            "Deep Learning": ["neural networks", "activation functions", "backpropagation", "loss functions", "optimizers", "regularization", "hyperparameters", "CNNs", "RNNs"]
+        }
+
+        focus_sub_topics = []
+        for tech in selected_techs:
+            sub_list = tech_sub_topics.get(tech)
+            if sub_list:
+                focus_sub_topics.extend(random.sample(sub_list, min(3, len(sub_list))))
+        
+        focus_instruction = ""
+        if focus_sub_topics:
+            focus_instruction = f" Focus your questions primarily around these random sub-topics: {', '.join(focus_sub_topics)}."
+
+        prompt = f"""You are a Senior Technical Interviewer at Google, NVIDIA, and Meta.
 Generate EXACTLY {count} clear, natural, highly understandable interview questions based on topics [{', '.join(selected_techs)}] and difficulty "{difficulty}".
 Session Seed: {seed} (Use this seed to select a completely different set of questions than in previous sessions to ensure variety).{focus_instruction}
 
@@ -142,7 +210,7 @@ STRICT QUALITY RULES:
    - {difficulty_guide}
 3. NO DUPLICATES: Every question stem and concept must be 100% unique in the returned array.
 4. MCQ FORMAT ({mcq_count} questions): 4 distinct, clear options ("A. ...", "B. ...", "C. ...", "D. ..."). Randomize the correct answer position across A, B, C, D.
-5. TYPING FORMAT ({typing_count} question): Free-text typing question asking the candidate for a brief technical explanation.
+5. {typing_format_instruction}
 6. {hr_instruction}
 
 Return ONLY a valid JSON array of {count} objects matching this schema:

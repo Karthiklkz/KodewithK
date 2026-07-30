@@ -11,6 +11,7 @@ import { InstantFeedbackCard } from '@/components/InstantFeedbackCard';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { ApiKeyModal } from '@/components/ApiKeyModal';
 import { ParticleBackground } from '@/components/ParticleBackground';
+import { ResumeQA } from '@/components/ResumeQA';
 
 import {
   Question,
@@ -20,14 +21,14 @@ import {
   FinalAnalytics,
   QuestionCount,
 } from '@/lib/types';
-import { generateAIQuestions, evaluateAIAnswer } from '@/lib/nvidiaClient';
+import { generateAIQuestions, evaluateAIAnswer, extractSkillsFromResume } from '@/lib/nvidiaClient';
 
 const RENDER_BACKEND_URL = 'https://kodewithk.onrender.com';
 
 export default function Home() {
   // Navigation step state
   const [currentStep, setCurrentStep] = useState<
-    'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics'
+    'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics' | 'resumeQA'
   >('landing');
 
   // UI & Theme state
@@ -36,7 +37,7 @@ export default function Home() {
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   // Configuration state
-  const [questionCount, setQuestionCount] = useState<QuestionCount>(5);
+  const [questionCount, setQuestionCount] = useState<QuestionCount>(10);
   const [selectedTechs, setSelectedTechs] = useState<string[]>(['Python']);
 
   // Suppress Next.js / React DevTools console prompts
@@ -99,9 +100,15 @@ export default function Home() {
 
 
   // Start interview generation process
-  const handleStartInterview = async () => {
+  const handleStartInterview = async (resumeContent?: string) => {
     setIsLoadingQuestions(true);
-    const targetTechs = selectedTechs.length > 0 ? selectedTechs : ['Python'];
+    
+    let targetTechs = selectedTechs.length > 0 ? selectedTechs : ['Python'];
+    if (resumeContent) {
+      const extracted = extractSkillsFromResume(resumeContent);
+      setSelectedTechs(extracted);
+      targetTechs = extracted;
+    }
 
     let questionsList: Question[] = [];
     let newSessionId = `session_${Date.now()}`;
@@ -113,9 +120,10 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           questionCount,
-          selectedTechs: targetTechs,
+          selectedTechs: resumeContent ? [] : targetTechs,
           difficulty,
           apiKey,
+          resumeText: resumeContent,
         }),
       });
 
@@ -135,10 +143,11 @@ export default function Home() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            selectedTechs: targetTechs,
+            selectedTechs: resumeContent ? [] : targetTechs,
             difficulty,
             questionCount,
             apiKey,
+            resumeText: resumeContent,
           }),
         });
 
@@ -158,7 +167,8 @@ export default function Home() {
         difficulty,
         questionCount,
         'technical',
-        apiKey
+        apiKey,
+        resumeContent
       );
     }
 
@@ -359,6 +369,7 @@ export default function Home() {
       <Navbar
         currentStep={currentStep}
         onNavigateHome={() => setCurrentStep('landing')}
+        onNavigateToResumeQA={() => setCurrentStep('resumeQA')}
         onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         hasApiKey={Boolean(apiKey)}
         apiKey={apiKey}
@@ -367,7 +378,10 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10 flex flex-col justify-center">
         {currentStep === 'landing' && (
-          <LandingHero onStart={() => setCurrentStep('tech')} />
+          <LandingHero 
+            onStart={() => setCurrentStep('tech')} 
+            onStartResumeQA={() => setCurrentStep('resumeQA')}
+          />
         )}
 
         {currentStep === 'tech' && (
@@ -417,6 +431,13 @@ export default function Home() {
             analytics={finalAnalytics}
             results={results}
             onAutoPurgeComplete={handleRestart}
+          />
+        )}
+
+        {currentStep === 'resumeQA' && (
+          <ResumeQA 
+            apiKey={apiKey} 
+            onStartResumeInterview={(resumeText) => handleStartInterview(resumeText)}
           />
         )}
       </main>

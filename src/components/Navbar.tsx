@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Key, Terminal, Sparkles } from 'lucide-react';
+import { Key, Terminal, Sparkles, FileText } from 'lucide-react';
 
 interface NavbarProps {
-  currentStep: 'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics';
+  currentStep: 'landing' | 'tech' | 'difficulty' | 'interview' | 'analytics' | 'resumeQA';
   onNavigateHome: () => void;
+  onNavigateToResumeQA: () => void;
   onOpenApiKeyModal: () => void;
   hasApiKey: boolean;
   apiKey?: string;
@@ -14,6 +15,7 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentStep,
   onNavigateHome,
+  onNavigateToResumeQA,
   onOpenApiKeyModal,
   hasApiKey,
   apiKey,
@@ -31,21 +33,23 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const currentIndex = getStepIndex(currentStep);
+  const isResumeMode = currentStep === 'resumeQA';
+  const showProgressSteps = currentStep !== 'landing' && currentStep !== 'resumeQA';
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-slate-950/70 border-b border-slate-800/80 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Brand Logo - KodeWithK */}
         <button
           onClick={onNavigateHome}
-          className="flex items-center gap-3 group focus:outline-none"
+          className="flex items-center gap-3 group focus:outline-none shrink-0"
         >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-teal-400 to-indigo-600 p-[1.5px] shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform duration-300">
             <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-mono font-black text-cyan-400 text-lg">
               K
             </div>
           </div>
-          <div className="text-left">
+          <div className="text-left hidden sm:block">
             <div className="flex items-center gap-1">
               <span className="font-extrabold text-xl tracking-tight text-white group-hover:text-cyan-400 transition-colors">
                 Kode<span className="bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">WithK</span>
@@ -53,15 +57,41 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
             <p className="text-[10px] text-slate-400 font-mono tracking-wider uppercase flex items-center gap-1">
               <Terminal className="w-3 h-3 text-cyan-400 shrink-0" />
-              <span className="hidden sm:inline">Technical AI Prep • </span>
+              <span>Technical AI Prep • </span>
               <span className="text-cyan-400 font-semibold normal-case">By Karthik</span>
             </p>
           </div>
         </button>
 
-        {/* Dynamic Navigation Progress Steps */}
-        {currentStep !== 'landing' && (
-          <nav className="hidden md:flex items-center gap-1 bg-slate-900/60 p-1.5 rounded-full border border-slate-800/80">
+        {/* Tab Switcher - Toggle between Mock Interview and Resume QA */}
+        <div className="flex items-center gap-1 bg-slate-900/60 p-1 rounded-xl border border-slate-800/80">
+          <button
+            onClick={onNavigateHome}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-300 ${
+              !isResumeMode
+                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 text-cyan-400'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span>Mock Interview</span>
+          </button>
+          <button
+            onClick={onNavigateToResumeQA}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-300 ${
+              isResumeMode
+                ? 'bg-gradient-to-r from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 text-cyan-400'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Resume Q&A</span>
+          </button>
+        </div>
+
+        {/* Dynamic Navigation Progress Steps (For interview mode only) */}
+        {showProgressSteps && (
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-900/60 p-1.5 rounded-full border border-slate-800/80">
             {steps.slice(1).map((step, idx) => {
               const stepIdx = idx + 1;
               const isActive = currentStep === step.key;
@@ -97,7 +127,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         {/* Right Action Bar */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           {/* API Key Status Pill */}
           <button
             onClick={onOpenApiKeyModal}
@@ -121,8 +151,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
             <span className="w-2 h-2 rounded-full animate-pulse bg-current" />
           </button>
-
-
         </div>
       </div>
     </header>

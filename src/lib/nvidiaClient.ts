@@ -12,23 +12,52 @@ const HR_SKILLS_SET = new Set([
   'HR & Behavioral Leadership', 'HR'
 ]);
 
+export function extractSkillsFromResume(text: string): string[] {
+  const commonSkills = [
+    'Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Next.js',
+    'Django', 'Flask', 'Java', 'C++', 'Rust', 'Go', 'SQL', 'PostgreSQL',
+    'MongoDB', 'MySQL', 'AWS', 'Docker', 'Kubernetes', 'Generative AI',
+    'Deep Learning', 'Machine Learning', 'Git', 'HTML', 'CSS', 'Tailwind'
+  ];
+  
+  const foundSkills = commonSkills.filter(skill => {
+    const regex = new RegExp(`\\b${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    return regex.test(text);
+  });
+
+  return foundSkills.length > 0 ? foundSkills : ['JavaScript', 'Python', 'SQL'];
+}
+
 export async function generateAIQuestions(
   selectedTechs: string[],
   difficulty: Difficulty,
   questionCount: number = 5,
   mode: InterviewMode = 'technical',
-  apiKey?: string
+  apiKey?: string,
+  resumeText?: string
 ): Promise<Question[]> {
   const activeKey = formatApiKey(apiKey || process.env.GROQ_API_KEY);
 
-  if (!activeKey) {
-    console.log('[AI Engine] No API key provided. Using dynamic question generator.');
-    return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
+  let targetTechs = selectedTechs;
+  if (resumeText && (!selectedTechs || selectedTechs.length === 0)) {
+    targetTechs = extractSkillsFromResume(resumeText);
   }
 
-  const hasHrSelected = selectedTechs.some((t) => HR_SKILLS_SET.has(t));
+  if (!activeKey) {
+    console.log('[AI Engine] No API key provided. Using dynamic question generator.');
+    return generateMockQuestions(targetTechs, difficulty, questionCount, mode);
+  }
+
+  const hasHrSelected = targetTechs.some((t) => HR_SKILLS_SET.has(t));
   const typingCount = Math.max(1, Math.round(questionCount * 0.2));
   const mcqCount = questionCount - typingCount;
+
+  let typingFormatInstruction = '';
+  if (difficulty === 'Hard' || difficulty === 'Expert') {
+    typingFormatInstruction = `EXACTLY ${typingCount} question(s) MUST BE SCENARIO-BASED FREE-TEXT QUESTIONS ('scenario') where the candidate is presented with a complex, real-world engineering challenge, bug, or architectural trade-off and must explain their solution/approach.`;
+  } else {
+    typingFormatInstruction = `EXACTLY ${typingCount} question(s) MUST BE FREE-TEXT TYPING QUESTIONS ('text' or 'scenario') requiring the candidate to type a short technical explanation, scenario-based design trade-offs, or optimization choices.`;
+  }
 
   const hrRule = hasHrSelected
     ? "Include questions based on selected HR/Behavioral topics."
@@ -41,32 +70,73 @@ export async function generateAIQuestions(
     Expert: "Target PRINCIPAL/STAFF ARCHITECT ENGINEERS: Ask EXTREMELY TOUGH, DEEP-INTERNALS interview questions! Focus on core runtime internals, lockless concurrency, memory barrier semantics, low-level optimization, and high-scale distributed system trade-offs."
   };
 
-  const techSubTopics: Record<string, string[]> = {
-    Python: ["data types", "control flow", "list comprehensions", "generators", "decorators", "OOP", "file handling", "exception handling", "lambdas", "built-in functions", "operators"],
-    JavaScript: ["event loop", "promises", "async/await", "closures", "prototypes", "scope", "DOM", "destructuring", "arrays", "arrow functions"],
-    TypeScript: ["generics", "interfaces", "types", "enums", "union types", "type guards", "utility types", "strict typing"],
-    SQL: ["joins", "indexes", "subqueries", "aggregations", "transactions", "grouping", "constraints", "window functions"],
-    "Generative AI": ["prompting", "fine-tuning", "transformers", "embeddings", "RAG", "attention", "tokenization", "LLM parameters"],
-    "Deep Learning": ["neural networks", "activation functions", "backpropagation", "loss functions", "optimizers", "regularization", "hyperparameters", "CNNs", "RNNs"]
-  };
+  let prompt = '';
+  if (resumeText) {
+    prompt = `You are a Senior Technical and Engineering Interviewer.
+Analyze the candidate's resume and generate EXACTLY ${questionCount} clear, natural, highly understandable technical interview questions based on their projects, work experience, and tech stack.
 
-  const focusSubTopics: string[] = [];
-  selectedTechs.forEach((tech) => {
-    const subList = techSubTopics[tech];
-    if (subList) {
-      const shuffled = [...subList].sort(() => 0.5 - Math.random());
-      focusSubTopics.push(...shuffled.slice(0, 3));
-    }
-  });
+Resume Content:
+---
+${resumeText}
+---
 
-  const focusInstruction = focusSubTopics.length > 0
-    ? ` Focus your questions primarily around these random sub-topics: ${focusSubTopics.join(', ')}.`
-    : '';
+STRICT DIFFICULTY ENFORCEMENT (${difficulty}):
+- ${difficultyGuide[difficulty] || "Match requested difficulty precisely."}
 
-  const seed = Math.floor(Math.random() * 1000000);
-  const prompt = `You are a Senior Technical and Engineering Interviewer.
-Use the selected topics [${selectedTechs.join(', ')}] and difficulty level "${difficulty}" to create exactly ${questionCount} unique interview questions.
-Session Seed: ${seed} (Use this random seed to select a completely different set of questions than in previous sessions to ensure variety).${focusInstruction}
+IMPORTANT RULES:
+1. RELEVANCE TO RESUME: Every question must directly relate to a technology, skill, or project mentioned in the resume. Focus on the core tech stack and projects they did.
+2. SPECIFIC PROJECT/SCENARIO QUESTIONS: Include at least one or two questions that explicitly mention a project from their resume (e.g., "In your project [Project Name]...").
+3. UNDERSTANDABLE & CLEAR LANGUAGE: Ask clear, plain, professional interview questions that real software engineers easily understand. Avoid awkward, convoluted, or robotic phrasing.
+4. Generate EXACTLY ${questionCount} questions total.
+5. QUESTION TYPE RATIO (STRICT 80:20 RULE):
+   - EXACTLY ${mcqCount} questions MUST BE MULTIPLE CHOICE ('mcq') with 4 distinct options ("A. ...", "B. ...", "C. ...", "D. ...") or True/False ('true_false').
+   - ${typingFormatInstruction}
+6. RANDOMIZE MCQ CORRECT ANSWERS:
+   - For MCQ questions, vary the position of the correct answer across "A", "B", "C", and "D". DO NOT always place the correct answer as Option A!
+7. Every single question must be completely distinct. DO NOT REPEAT any question stems or concepts in the same round.
+
+Return ONLY a valid JSON array of ${questionCount} objects matching this JSON schema:
+[
+  {
+    "id": "q_1",
+    "question": "string",
+    "type": "mcq | true_false | text | scenario",
+    "difficulty": "${difficulty}",
+    "technology": "string from resume tech stack or project name",
+    "options": ["A...", "B...", "C...", "D..."] (REQUIRED if type is mcq or true_false),
+    "correctAnswer": "string",
+    "explanation": "string",
+    "keywords": ["string", "string"]
+  }
+]
+Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
+  } else {
+    const techSubTopics: Record<string, string[]> = {
+      Python: ["data types", "control flow", "list comprehensions", "generators", "decorators", "OOP", "file handling", "exception handling", "lambdas", "built-in functions", "operators"],
+      JavaScript: ["event loop", "promises", "async/await", "closures", "prototypes", "scope", "DOM", "destructuring", "arrays", "arrow functions"],
+      TypeScript: ["generics", "interfaces", "types", "enums", "union types", "type guards", "utility types", "strict typing"],
+      SQL: ["joins", "indexes", "subqueries", "aggregations", "transactions", "grouping", "constraints", "window functions"],
+      "Generative AI": ["prompting", "fine-tuning", "transformers", "embeddings", "RAG", "attention", "tokenization", "LLM parameters"],
+      "Deep Learning": ["neural networks", "activation functions", "backpropagation", "loss functions", "optimizers", "regularization", "hyperparameters", "CNNs", "RNNs"]
+    };
+
+    const focusSubTopics: string[] = [];
+    targetTechs.forEach((tech) => {
+      const subList = techSubTopics[tech];
+      if (subList) {
+        const shuffled = [...subList].sort(() => 0.5 - Math.random());
+        focusSubTopics.push(...shuffled.slice(0, 3));
+      }
+    });
+
+    const focusInstruction = focusSubTopics.length > 0
+      ? ` Focus your questions primarily around these random sub-topics: ${focusSubTopics.join(', ')}.`
+      : '';
+
+    const seed = Math.floor(Math.random() * 1000000);
+    prompt = `You are a Senior Technical and Engineering Interviewer.
+Use the selected topics [${targetTechs.join(', ')}] and difficulty level "${difficulty}" to create exactly ${questionCount} unique interview questions.
+Session Seed: {seed} (Use this random seed to select a completely different set of questions than in previous sessions to ensure variety).${focusInstruction}
 
 STRICT DIFFICULTY ENFORCEMENT (${difficulty}):
 - ${difficultyGuide[difficulty] || "Match requested difficulty precisely."}
@@ -75,7 +145,7 @@ IMPORTANT RULES:
 1. Generate EXACTLY ${questionCount} questions total.
 2. QUESTION TYPE RATIO (STRICT 80:20 RULE):
    - EXACTLY ${mcqCount} questions MUST BE MULTIPLE CHOICE ('mcq') with 4 distinct options ("A. ...", "B. ...", "C. ...", "D. ...") or True/False ('true_false').
-   - EXACTLY ${typingCount} question(s) MUST BE FREE-TEXT TYPING QUESTIONS ('text' or 'scenario') requiring the candidate to type a short technical explanation.
+   - ${typingFormatInstruction}
 3. RANDOMIZE MCQ CORRECT ANSWERS:
    - For MCQ questions, vary the position of the correct answer across "A", "B", "C", and "D". DO NOT always place the correct answer as Option A!
 4. Every single question must be completely distinct. DO NOT REPEAT any question stems or concepts in the same round.
@@ -96,6 +166,7 @@ Return ONLY a valid JSON array of ${questionCount} objects matching this JSON sc
   }
 ]
 Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
+  }
 
   let apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
   let modelName = 'llama-3.3-70b-versatile';
@@ -122,7 +193,7 @@ Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
 
     if (!response.ok) {
       console.warn(`[AI Engine] API request failed with status ${response.status}. Falling back to dynamic generator.`);
-      return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
+      return generateMockQuestions(targetTechs, difficulty, questionCount, mode);
     }
 
     const data = await response.json();
@@ -144,14 +215,14 @@ Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
             seenQuestions.add(qText);
             uniqueQuestions.push({
               id: `ai_q_${uniqueQuestions.length + 1}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-              question: item.question || `Explain key concepts of ${selectedTechs[0]}`,
+              question: item.question || `Explain key concepts of ${targetTechs[0]}`,
               type: item.type || 'mcq',
               difficulty: item.difficulty || difficulty,
-              technology: item.technology || selectedTechs[idx % selectedTechs.length],
+              technology: item.technology || targetTechs[idx % targetTechs.length],
               options: item.options || (item.type === 'mcq' ? ['A. Option 1', 'B. Option 2', 'C. Option 3', 'D. Option 4'] : undefined),
               correctAnswer: item.correctAnswer || (item.options ? item.options[0] : 'Correct response'),
               explanation: item.explanation || 'Detailed explanation.',
-              keywords: item.keywords || [item.technology || selectedTechs[0]],
+              keywords: item.keywords || [item.technology || targetTechs[0]],
               codeSnippet: item.codeSnippet,
               scenarioContext: item.scenarioContext,
             });
@@ -162,7 +233,7 @@ Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
 
         if (uniqueQuestions.length > 0) {
           if (uniqueQuestions.length < questionCount) {
-            const extra = generateMockQuestions(selectedTechs, difficulty, questionCount - uniqueQuestions.length, mode);
+            const extra = generateMockQuestions(targetTechs, difficulty, questionCount - uniqueQuestions.length, mode);
             return [...uniqueQuestions, ...extra];
           }
           return uniqueQuestions;
@@ -171,10 +242,10 @@ Do not wrap in markdown codeblocks if possible, output raw JSON array.`;
     }
 
     console.warn('[AI Engine] Failed to parse JSON from response. Falling back to dynamic generator.');
-    return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
+    return generateMockQuestions(targetTechs, difficulty, questionCount, mode);
   } catch (error) {
     console.error('[AI Engine] Exception while calling LLM API:', error);
-    return generateMockQuestions(selectedTechs, difficulty, questionCount, mode);
+    return generateMockQuestions(targetTechs, difficulty, questionCount, mode);
   }
 }
 
@@ -265,3 +336,74 @@ Output raw JSON object only.`;
     return evaluateAnswerLocally(question, userAnswer);
   }
 }
+
+export async function chatWithResume(
+  resumeText: string,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  apiKey?: string
+): Promise<string> {
+  const activeKey = formatApiKey(apiKey || process.env.GROQ_API_KEY);
+
+  if (!activeKey) {
+    const lastUserMsg = messages[messages.length - 1]?.content || '';
+    return `[Mock AI Response - Setup Groq Key for Live Chat]:\n\nI analyzed your resume (${resumeText.length} characters). You asked:\n\n> "${lastUserMsg}"\n\nPlease add a valid Groq API Key in the top right to start a live AI discussion about your resume!`;
+  }
+
+  try {
+    const response = await fetch('/api/resume', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'chat',
+        resumeText,
+        messages,
+        apiKey: activeKey,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.content || 'No response generated.';
+  } catch (error) {
+    console.error('[Resume QA AI] Error:', error);
+    return `Failed to fetch response from AI. Error: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+export async function summarizeResume(resumeText: string, apiKey?: string): Promise<string> {
+  const activeKey = formatApiKey(apiKey || process.env.GROQ_API_KEY);
+
+  if (!activeKey) {
+    return "### Resume Analysis (Offline Mode)\n\n*   **Resume Length:** " + resumeText.length + " characters.\n*   *Please enter your Groq API key in the top-right corner to get an automated AI executive summary, strengths, and improvement suggestions.*";
+  }
+
+  try {
+    const response = await fetch('/api/resume', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'summarize',
+        resumeText,
+        apiKey: activeKey,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.content || 'No summary generated.';
+  } catch (error) {
+    console.error('[Resume Summarize AI] Error:', error);
+    return "Failed to generate resume summary.";
+  }
+}
+

@@ -1,0 +1,18 @@
+JOHN DOE
+Senior Full-Stack Software Engineer
+john.doe@email.com | +1-555-019-2834
+
+TECHNICAL SKILLS:
+- Languages: TypeScript, JavaScript, Python, SQL, HTML, CSS
+- Frameworks: React, Next.js, Node.js, Express, FastAPI, Tailwind CSS
+- Cloud & DevOps: AWS (Lambda, S3, EC2), Docker, Kubernetes, Git, CI/CD
+
+PROFESSIONAL EXPERIENCE:
+
+1. E-Commerce Platform Refactor (Senior Developer)
+- Architected and rebuilt a high-traffic e-commerce storefront using React, Next.js, and Tailwind CSS, increasing page speeds by 40%.
+- Designed Node.js and Express microservices running inside Docker containers on AWS ECS.
+
+2. Real-Time Data Pipeline (Data & Backend Engineer)
+- Developed a serverless data ingestion pipeline using Python, AWS Lambda, and PostgreSQL.
+- Implemented automated CI/CD testing pipelines that reduced deployment errors by 25%.

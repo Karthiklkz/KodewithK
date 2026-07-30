@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateAIQuestions } from '@/lib/nvidiaClient';
+import { generateAIQuestions, extractSkillsFromResume } from '@/lib/nvidiaClient';
 import { sessionStore } from '@/lib/sessionStore';
 import { generateSessionId } from '@/lib/utils';
 import { Difficulty, InterviewSession, QuestionCount } from '@/lib/types';
@@ -9,19 +9,22 @@ const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'https://kodewithk.
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { selectedTechs, difficulty, questionCount, apiKey } = body as {
-      selectedTechs: string[];
+    const { selectedTechs, difficulty, questionCount, apiKey, resumeText } = body as {
+      selectedTechs?: string[];
       difficulty: Difficulty;
       questionCount?: QuestionCount;
       apiKey?: string;
+      resumeText?: string;
     };
+
+    const cleanResume = (resumeText || '').slice(0, 15000);
 
     const targetTechs = selectedTechs && selectedTechs.length > 0
       ? selectedTechs
-      : ['JavaScript', 'Python', 'SQL'];
+      : (cleanResume ? extractSkillsFromResume(cleanResume) : ['JavaScript', 'Python', 'SQL']);
 
     const targetDifficulty = difficulty || 'Medium';
-    const targetCount: QuestionCount = (questionCount && [5, 10, 15, 20, 25, 30].includes(questionCount)) ? questionCount : 5;
+    const targetCount: QuestionCount = (questionCount && [10, 15, 20, 25, 30].includes(questionCount)) ? questionCount : 10;
 
     let questions = [];
 
@@ -35,6 +38,7 @@ export async function POST(req: NextRequest) {
           difficulty: targetDifficulty,
           questionCount: targetCount,
           apiKey,
+          resumeText: cleanResume,
         }),
       });
 
@@ -56,7 +60,8 @@ export async function POST(req: NextRequest) {
         targetDifficulty,
         targetCount,
         'technical',
-        apiKey
+        apiKey,
+        cleanResume
       );
     }
 
